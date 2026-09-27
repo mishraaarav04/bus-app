@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Bus App",
+    "slug": "bus-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your location is shared only while a ride is active, so the app can track boarding and arrival.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Driver location is shared for the duration of an active ride so parents, students, and admins can see the bus."
+      }
+    },
+    "android": {
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION"]
+    }
+  }
+}
