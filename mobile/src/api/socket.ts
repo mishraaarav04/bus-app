@@ -1,6 +1,18 @@
-import { io } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 import { API_BASE_URL } from "./client";
 
-// Single shared socket for the app session. Connect once, near the root
-// (see App.tsx), and reuse everywhere via this export.
-export const socket = io(API_BASE_URL, { autoConnect: false });
+let socket: Socket | null = null;
+
+/** One authenticated socket per signed-in session. */
+export function connectSocket(token: string): Socket {
+  socket?.disconnect();
+  socket = io(API_BASE_URL, { auth: { token }, transports: ["websocket"], reconnection: true });
+  return socket;
+}
+
+export function disconnectSocket() {
+  socket?.disconnect();
+  socket = null;
+}
+
+export const getSocket = () => socket;

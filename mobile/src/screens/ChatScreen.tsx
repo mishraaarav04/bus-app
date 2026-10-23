@@ -1,23 +1,14 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  FlatList,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import { useAuth } from "../context/AuthContext";
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { api } from "../api/client";
-import { socket } from "../api/socket";
+import { getSocket } from "../api/socket";
+import { useAuth } from "../context/AuthContext";
+import { colors, radius } from "../theme";
 import type { ChatMessage } from "../types";
 
 /**
- * One conversation view, reused for every chat "kind" (parent group,
- * parent<->driver, driver/parent<->admin). Student<->student chat is
- * deliberately not offered anywhere in the nav — cut per the earlier plan.
+ * One conversation view. Not linked from any tab yet - the server side is
+ * secured (sign-in required, members only), the UI to start chats comes later.
  */
 export function ChatScreen({ conversationId }: { conversationId: string }) {
   const { user } = useAuth();
@@ -25,61 +16,44 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
   const [draft, setDraft] = useState("");
 
   useEffect(() => {
-    api
-      .getMessages(conversationId)
-      .then((m) => setMessages(m as ChatMessage[]))
-      .catch(() => {});
-
-    socket.connect();
-    socket.emit("chat:join", { conversationId });
-    socket.on("chat:message", (msg: ChatMessage) => {
+    api.getMessages(conversationId).then(setMessages).catch(() => {});
+    const socket = getSocket();
+    const onMsg = (msg: ChatMessage) => {
       if (msg.conversationId === conversationId) {
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       }
-    });
+    };
+    socket?.on("chat:message", onMsg);
     return () => {
-      socket.off("chat:message");
+      socket?.off("chat:message", onMsg);
     };
   }, [conversationId]);
 
   async function send() {
-    if (!draft.trim() || !user) return;
-    const msg = await api.sendMessage(conversationId, {
-      senderId: user.id,
-      senderRole: user.role,
-      body: draft.trim(),
-    });
-    socket.emit("chat:message", msg);
+    if (!draft.trim()) return;
+    const text = draft.trim();
     setDraft("");
+    try {
+      await api.sendMessage(conversationId, text); // arrives back over the socket
+    } catch {
+      setDraft(text);
+    }
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <FlatList
         data={messages}
         keyExtractor={(m) => m.id}
         renderItem={({ item }) => (
-          <View
-            style={[
-              styles.bubble,
-              item.senderId === user?.id && styles.bubbleMine,
-            ]}
-          >
+          <View style={[styles.bubble, item.senderId === user?.id && styles.bubbleMine]}>
             <Text style={styles.sender}>{item.senderRole}</Text>
             <Text>{item.body}</Text>
           </View>
         )}
       />
       <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          value={draft}
-          onChangeText={setDraft}
-          placeholder="Message"
-        />
+        <TextInput style={styles.input} value={draft} onChangeText={setDraft} placeholder="Message" />
         <Pressable style={styles.sendButton} onPress={send}>
           <Text style={styles.sendButtonText}>Send</Text>
         </Pressable>
@@ -90,30 +64,11 @@ export function ChatScreen({ conversationId }: { conversationId: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 12 },
-  bubble: {
-    backgroundColor: "#f3f4f6",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 8,
-    alignSelf: "flex-start",
-    maxWidth: "80%",
-  },
-  bubbleMine: { backgroundColor: "#dbeafe", alignSelf: "flex-end" },
-  sender: { fontSize: 11, color: "#666", marginBottom: 2 },
+  bubble: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 10, marginBottom: 8, alignSelf: "flex-start", maxWidth: "80%" },
+  bubbleMine: { backgroundColor: colors.primarySoft, alignSelf: "flex-end" },
+  sender: { fontSize: 11, color: colors.muted, marginBottom: 2 },
   inputRow: { flexDirection: "row", gap: 8, marginTop: 8 },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  sendButton: {
-    backgroundColor: "#2563eb",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    justifyContent: "center",
-  },
-  sendButtonText: { color: "#fff", fontWeight: "600" },
+  input: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
+  sendButton: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: 16, justifyContent: "center" },
+  sendButtonText: { color: colors.white, fontWeight: "700" },
 });

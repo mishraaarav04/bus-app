@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import * as Location from "expo-location";
 
 /**
- * Starts/stops foreground location polling while `active` is true and calls
- * `onUpdate` with each fix. This is what backs "activate my ride" for both
- * students and drivers — real GPS, no mocking. Background tracking (so it
- * keeps sharing if the phone is locked) needs expo-task-manager and is left
- * as a follow-up, since that setup is more involved than this rudimentary
- * pass needs.
+ * Foreground GPS while `active` is true, calling `onUpdate` with each fix. Used by
+ * the driver only: sharing starts when a ride starts and stops when it ends.
+ * It does not keep running if the phone locks or the app is closed (that needs
+ * background location, which needs a custom dev build rather than Expo Go).
  */
 export function useLocationSharing(
   active: boolean,
@@ -18,6 +16,9 @@ export function useLocationSharing(
     null
   );
   const subscription = useRef<Location.LocationSubscription | null>(null);
+  // Always call the latest callback, not the one captured when sharing started.
+  const latest = useRef(onUpdate);
+  latest.current = onUpdate;
 
   useEffect(() => {
     let cancelled = false;
@@ -31,7 +32,7 @@ export function useLocationSharing(
       subscription.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, timeInterval: intervalMs, distanceInterval: 10 },
         (loc) => {
-          onUpdate({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+          latest.current({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         }
       );
     }

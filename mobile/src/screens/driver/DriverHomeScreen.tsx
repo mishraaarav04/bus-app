@@ -1,159 +1,201 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, StyleSheet, FlatList } from "react-native";
-import { useAuth } from "../../context/AuthContext";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, Text, View } from "react-native";
 import { api } from "../../api/client";
-import { socket } from "../../api/socket";
+import { getSocket } from "../../api/socket";
+import { MapShell } from "../../components/MapShell";
+import { MapMarker } from "../../components/MapView";
+import { ScannerModal } from "../../components/ScannerModal";
+import { Button, Card, Empty, ErrorText, Pill, Row, statusPill } from "../../components/ui";
+import { useActiveRides } from "../../hooks/useActiveRides";
 import { useLocationSharing } from "../../hooks/useLocationSharing";
-import type { Route, RideSession } from "../../types";
+import { colors, font, formatDuration, formatEta, formatMiles } from "../../theme";
+import { Route, StaffRideView } from "../../types";
 
 /**
- * Driver screen: pick today's route, activate the ride (starts sharing bus
- * location to everyone on the route), and step through stops. Departing a
- * stop is a manual button here — wiring automatic "bus left the geofence"
- * detection to this same advancePastStop() server logic is a small
- * follow-up once you're testing with a real device outdoors.
+ * Driver home. Starting a ride turns on location sharing; ending it turns it
+ * off again (and the bus disappears from every family's map).
  */
-export function DriverHomeScreen({
-  rideId,
-  onRideStarted,
-}: {
-  rideId: string | null;
-  onRideStarted: (id: string) => void;
-}) {
-  const { user } = useAuth();
+export function DriverHomeScreen() {
+  const { rides, refresh } = useActiveRides();
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-  const [ride, setRide] = useState<RideSession | null>(null);
-  const [active, setActive] = useState(false);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
+
+  const ride = (rides.find((r) => r.kind === "staff") as StaffRideView | undefined) ?? null;
+  const rideId = ride?.session.id ?? null;
 
   useEffect(() => {
-    api.listRoutes().then((r) => setRoutes(r as Route[])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!rideId) return;
-    socket.connect();
-    socket.emit("ride:join", { rideId });
-    socket.on("ride:update", (session: RideSession) => setRide(session));
-    return () => {
-      socket.off("ride:update");
-    };
+    api.listRoutes().then(setRoutes).catch((e) => setError(e.message));
   }, [rideId]);
 
-  useLocationSharing(active, (loc) => {
+  // GPS runs only while a ride is active.
+  useLocationSharing(Boolean(rideId), (loc) => {
+    setMe(loc);
     if (!rideId) return;
-    socket.emit("ride:driver-location", { rideId, ...loc });
+    const socket = getSocket();
+    if (socket?.connected) socket.emit("ride:driver-location", { rideId, ...loc });
+    else api.pushLocation(rideId, loc.lat, loc.lng).catch(() => {});
   });
 
-  async function handleStart() {
-    if (!selectedRouteId || !user) return;
-    const session = await api.startRide({
-      routeId: selectedRouteId,
-      driverId: user.id,
-    });
-    onRideStarted((session as RideSession).id);
-    setActive(true);
+  async function start(routeId: string) {
+    setError(null);
+    setStarting(routeId);
+    try {
+      await api.startRide(routeId);
+      await refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setStarting(null);
+    }
   }
 
-  const route = routes.find((r) => r.id === selectedRouteId);
+  function end() {
+    if (!rideId) return;
+    Alert.alert("End this ride?", "Your location stops being shared with families and the school.", [
+      { text: "Keep going", style: "cancel" },
+      {
+        text: "End ride",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.endRide(rideId);
+            setMe(null);
+            await refresh();
+          } catch (e: any) {
+            Alert.alert("Couldn't end ride", e.message);
+          }
+        },
+      },
+    ]);
+  }
+
+  const map = useMemo(() => {
+    const markers: MapMarker[] = [];
+    if (ride) {
+      const r = ride.route;
+      markers.push({ id: "school", kind: "school", lat: r.schoolLocation.lat, lng: r.schoolLocation.lng });
+      [...r.stops]
+        .sort((a, b) => a.order - b.order)
+        .forEach((s) => {
+          const st = ride.session.stopStates[s.id];
+          const tone = st?.status === "skipped" ? "gray" : ride.session.completedStopIds.includes(s.id) ? "green" : "orange";
+          markers.push({ id: s.id, kind: "stop", lat: s.location.lat, lng: s.location.lng, label: String(s.order + 1), tone });
+        });
+      const bus = me ?? ride.session.busLocation;
+      if (bus) markers.push({ id: "bus", kind: "bus", ...bus });
+      return { markers, line: r.geometry ?? null, fitKey: ride.session.id };
+    }
+    const first = routes[0];
+    if (first) {
+      markers.push({ id: "school", kind: "school", lat: first.schoolLocation.lat, lng: first.schoolLocation.lng });
+      first.stops.forEach((s) =>
+        markers.push({ id: s.id, kind: "stop", lat: s.location.lat, lng: s.location.lng, label: String(s.order + 1) })
+      );
+      return { markers, line: first.geometry ?? null, fitKey: first.id };
+    }
+    return { markers, line: null, fitKey: "none" };
+  }, [ride, routes, me]);
+
+  async function onScan(token: string) {
+    if (!rideId) throw new Error("Start a ride first.");
+    const r = await api.checkin(rideId, token);
+    return r.alreadyBoarded ? `${r.name} is already checked in` : `${r.name} checked in`;
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Hi {user?.name ?? "Driver"}</Text>
+    <>
+      <MapShell title="Wheelie driver" chip={ride ? <Pill text="Sharing location" tone="green" /> : undefined} map={map}>
+        {ride ? (
+          <>
+            <Card>
+              <Text style={font.h2}>{ride.routeName}</Text>
+              <Row style={{ flexWrap: "wrap" }}>
+                <Pill text={`${ride.boardedCount}/${ride.riderCount} checked in`} tone="green" />
+                <Pill text={`${ride.progress.completed}/${ride.progress.total} stops`} tone="orange" />
+                {ride.progress.etaToSchoolSec != null ? (
+                  <Pill text={`School in ${formatEta(ride.progress.etaToSchoolSec)}`} tone="gray" />
+                ) : null}
+              </Row>
+              <Button title="Scan student" onPress={() => setScanning(true)} />
+            </Card>
 
-      {!rideId && (
-        <>
-          <Text style={styles.sectionLabel}>Choose a route</Text>
-          <FlatList
-            data={routes}
-            keyExtractor={(r) => r.id}
-            renderItem={({ item }) => (
-              <Pressable
-                style={[
-                  styles.routeItem,
-                  selectedRouteId === item.id && styles.routeItemSelected,
-                ]}
-                onPress={() => setSelectedRouteId(item.id)}
-              >
-                <Text>{item.name}</Text>
-              </Pressable>
+            <Text style={font.h3}>Stops</Text>
+            {[...ride.route.stops]
+              .sort((a, b) => a.order - b.order)
+              .map((stop) => {
+                const st = ride.session.stopStates[stop.id];
+                const remaining = ride.session.remainingStopIds.includes(stop.id);
+                const kids = stop.studentIds.map((id) => ({
+                  id,
+                  name: ride.names[id] ?? "Student",
+                  status: st?.studentStatuses[id] ?? "pending",
+                }));
+                return (
+                  <Card key={stop.id} style={!remaining ? { opacity: 0.6 } : undefined}>
+                    <Row>
+                      <View style={{ flex: 1 }}>
+                        <Text style={font.h3}>
+                          {stop.order + 1}. {stop.name}
+                        </Text>
+                        {remaining && st?.etaSeconds != null ? (
+                          <Text style={font.small}>ETA {formatEta(st.etaSeconds)}</Text>
+                        ) : null}
+                      </View>
+                      {st?.status === "skipped" ? (
+                        <Pill text="Skipped - nobody riding" tone="gray" />
+                      ) : remaining ? (
+                        <Button
+                          title="Depart"
+                          variant="soft"
+                          style={{ minHeight: 40, paddingHorizontal: 16 }}
+                          onPress={() => api.departStop(ride.session.id, stop.id).catch((e) => Alert.alert("Error", e.message))}
+                        />
+                      ) : (
+                        <Pill text="Done" tone="green" />
+                      )}
+                    </Row>
+                    {kids.map((k) => {
+                      const p = statusPill(k.status);
+                      return (
+                        <Row key={k.id} style={{ justifyContent: "space-between" }}>
+                          <Text style={font.body}>{k.name}</Text>
+                          <Pill text={p.text} tone={p.tone} />
+                        </Row>
+                      );
+                    })}
+                  </Card>
+                );
+              })}
+            <Button title="End ride" variant="danger" onPress={end} />
+          </>
+        ) : (
+          <>
+            <Text style={font.h2}>Your routes</Text>
+            <Text style={font.small}>
+              Starting a ride shares your location with families and the school until you end it.
+            </Text>
+            <ErrorText text={error} />
+            {routes.length === 0 ? (
+              <Empty title="No routes yet" hint="Your bus company will assign a route to you." />
+            ) : (
+              routes.map((r) => (
+                <Card key={r.id}>
+                  <Text style={font.h3}>{r.name}</Text>
+                  <Text style={font.small}>
+                    {r.stops.length} stops · {r.direction === "to_school" ? "to school" : "to home"}
+                    {r.totalDurationSec ? ` · ${formatDuration(r.totalDurationSec)} · ${formatMiles(r.totalDistanceM)}` : ""}
+                  </Text>
+                  <Button title="Start ride" onPress={() => start(r.id)} loading={starting === r.id} />
+                </Card>
+              ))
             )}
-          />
-          <Pressable
-            style={[styles.button, !selectedRouteId && styles.buttonDisabled]}
-            onPress={handleStart}
-            disabled={!selectedRouteId}
-          >
-            <Text style={styles.buttonText}>Activate ride</Text>
-          </Pressable>
-        </>
-      )}
-
-      {rideId && ride && (
-        <>
-          <Text style={styles.sectionLabel}>Remaining stops</Text>
-          <FlatList
-            data={ride.remainingStopIds}
-            keyExtractor={(id) => id}
-            renderItem={({ item: stopId }) => {
-              const stop = route?.stops.find((s) => s.id === stopId);
-              const state = ride.stopStates[stopId];
-              return (
-                <View style={styles.stopRow}>
-                  <Text style={styles.stopName}>{stop?.name ?? stopId}</Text>
-                  <Text>{state.status}</Text>
-                  <Pressable
-                    style={styles.departButton}
-                    onPress={() => api.departStop(ride.id, stopId)}
-                  >
-                    <Text style={styles.departButtonText}>Depart</Text>
-                  </Pressable>
-                </View>
-              );
-            }}
-          />
-        </>
-      )}
-    </View>
+          </>
+        )}
+      </MapShell>
+      <ScannerModal visible={scanning} onClose={() => setScanning(false)} onScan={onScan} />
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, gap: 12 },
-  title: { fontSize: 22, fontWeight: "700" },
-  sectionLabel: { fontWeight: "700", marginTop: 8 },
-  routeItem: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  routeItemSelected: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
-  button: {
-    backgroundColor: "#16a34a",
-    padding: 14,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  stopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 8,
-    marginBottom: 6,
-  },
-  stopName: { fontWeight: "600" },
-  departButton: {
-    backgroundColor: "#111827",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-  },
-  departButtonText: { color: "#fff", fontSize: 12 },
-});

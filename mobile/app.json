@@ -1,19 +1,30 @@
 {
   "expo": {
-    "name": "Bus App",
-    "slug": "bus-app",
-    "version": "0.1.0",
+    "name": "Wheelie",
+    "slug": "wheelie",
+    "version": "0.2.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FFFFFF",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Wheelie uses the camera to scan students' boarding codes."
+        }
+      ]
+    ],
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Your location is shared only while a ride is active, so the app can track boarding and arrival.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Driver location is shared for the duration of an active ride so parents, students, and admins can see the bus."
+        "NSLocationWhenInUseUsageDescription": "Your bus location is shared only while a ride is active, so families and the school can follow the bus."
       }
     },
     "android": {
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION"]
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ]
     }
   }
 }
