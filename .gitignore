@@ -2,3 +2,7 @@ node_modules/
 dist/
 .expo/
 *.log
+.env
+.env.*
+!.env.example
+.DS_Store

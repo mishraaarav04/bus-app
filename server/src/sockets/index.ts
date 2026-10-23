@@ -1,49 +1,35 @@
 import type { Server } from "socket.io";
-import { rideSessions, routes as routeStore, studentLocations } from "../data/store.js";
-import { updateBusLocation, evaluateGeofences } from "../services/routing.js";
+import { rideSessions, users } from "../data/store.js";
+import { verifyAccessToken } from "../security/auth.js";
+import { locationSchema } from "../schemas.js";
+import { applyDriverLocation } from "../routes/rides.js";
 
 /**
- * Minimal real-time layer: a room per ride session. Driver location updates
- * and chat messages broadcast to everyone in the room. This is the one
- * piece that stands in for a push-notification/live-tracking backend — kept
- * intentionally small since wiring a real provider was called out as
- * something to figure out later.
+ * Real-time layer. Every connection must present a valid access token, and each
+ * user only ever receives events addressed to their own `user:<id>` room - the
+ * server sends each person a view scoped to what their role may see.
  */
 export function registerSockets(io: Server) {
+  io.use((socket, next) => {
+    const token = typeof socket.handshake.auth?.token === "string" ? socket.handshake.auth.token : "";
+    const userId = token ? verifyAccessToken(token) : null;
+    const user = userId ? users.get(userId) : undefined;
+    if (!user) return next(new Error("unauthorized"));
+    socket.data.userId = user.id;
+    next();
+  });
+
   io.on("connection", (socket) => {
-    socket.on("ride:join", ({ rideId }: { rideId: string }) => {
-      socket.join(rideId);
-    });
+    const userId: string = socket.data.userId;
+    socket.join(`user:${userId}`);
 
-    socket.on(
-      "ride:driver-location",
-      ({ rideId, lat, lng }: { rideId: string; lat: number; lng: number }) => {
-        const session = rideSessions.get(rideId);
-        const route = session && routeStore.get(session.routeId);
-        if (!session || !route) return;
-
-        updateBusLocation(session, route, { lat, lng });
-        evaluateGeofences(session, route, Object.fromEntries(studentLocations));
-        io.to(rideId).emit("ride:update", session);
-      }
-    );
-
-    socket.on(
-      "ride:student-location",
-      ({ studentId, lat, lng }: { studentId: string; lat: number; lng: number }) => {
-        studentLocations.set(studentId, { lat, lng });
-      }
-    );
-
-    socket.on(
-      "chat:message",
-      (msg: { conversationId: string; [key: string]: unknown }) => {
-        io.to(msg.conversationId).emit("chat:message", msg);
-      }
-    );
-
-    socket.on("chat:join", ({ conversationId }: { conversationId: string }) => {
-      socket.join(conversationId);
+    // Only the ride's own driver can move the bus.
+    socket.on("ride:driver-location", (payload: unknown) => {
+      const p = payload as { rideId?: unknown; lat?: unknown; lng?: unknown };
+      const loc = locationSchema.safeParse({ lat: p?.lat, lng: p?.lng });
+      const ride = typeof p?.rideId === "string" ? rideSessions.get(p.rideId) : undefined;
+      if (!loc.success || !ride || ride.driverId !== userId) return;
+      applyDriverLocation(ride, loc.data);
     });
   });
 }

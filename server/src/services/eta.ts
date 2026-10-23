@@ -13,7 +13,7 @@ const DEFAULT_AVG_SPEED_MPS = 8; // ~18 mph average with stop-and-go traffic
 export function recomputeEtas(
   session: RideSession,
   route: Route,
-  avgSpeedMps: number = DEFAULT_AVG_SPEED_MPS
+  avgSpeedMps: number = session.avgSpeedMps ?? DEFAULT_AVG_SPEED_MPS
 ): void {
   if (!session.busLocation) {
     for (const stopId of session.remainingStopIds) {

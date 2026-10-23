@@ -5,8 +5,26 @@ import type {
   StopRideState,
   BoardingStatus,
 } from "../types.js";
-import { isWithinGeofence } from "./geofence.js";
+import { distanceMeters, isWithinGeofence } from "./geofence.js";
 import { recomputeEtas } from "./eta.js";
+
+/**
+ * Speed that makes our straight-line ETA model add up to the Mapbox drive time
+ * for the whole run. Falls back to the default model when the route has no
+ * Mapbox timing (demo/hand-built routes).
+ */
+function calibratedSpeed(route: Route): number | undefined {
+  if (!route.totalDurationSec || route.totalDurationSec <= 0) return undefined;
+  const ordered = [...route.stops].sort((a, b) => a.order - b.order).map((s) => s.location);
+  const path =
+    route.direction === "to_school"
+      ? [...ordered, route.schoolLocation]
+      : [route.schoolLocation, ...ordered];
+  let meters = 0;
+  for (let i = 1; i < path.length; i++) meters += distanceMeters(path[i - 1], path[i]);
+  if (meters <= 0) return undefined;
+  return Math.min(25, Math.max(2, meters / route.totalDurationSec));
+}
 
 /**
  * Builds a fresh live ride session from a planned route. Every stop starts
@@ -44,7 +62,54 @@ export function startRideSession(
       .map((s) => s.id),
     stopStates,
     completedStopIds: [],
+    avgSpeedMps: calibratedSpeed(route),
+    boardedAt: {},
   };
+}
+
+/**
+ * A student tapped in on the driver's phone. Marks them boarded wherever they
+ * are in the plan (a late tap after "missed" still counts - they're on the bus).
+ */
+export function checkInStudent(
+  session: RideSession,
+  route: Route,
+  studentId: string
+): { ok: boolean; alreadyBoarded: boolean; stopId: string | null } {
+  const stop = route.stops.find((s) => s.studentIds.includes(studentId));
+  const state = stop && session.stopStates[stop.id];
+  if (!stop || !state) return { ok: false, alreadyBoarded: false, stopId: null };
+
+  if (state.studentStatuses[studentId] === "boarded") {
+    return { ok: true, alreadyBoarded: true, stopId: stop.id };
+  }
+  state.studentStatuses[studentId] = "boarded";
+  session.boardedAt = { ...(session.boardedAt ?? {}), [studentId]: new Date().toISOString() };
+
+  if (session.remainingStopIds.includes(stop.id) && state.status !== "skipped") {
+    const stillPending = stop.studentIds.some((id) => state.studentStatuses[id] === "pending");
+    // Only the stop being served right now flips to boarded; the driver's
+    // "depart" still decides when the stop is finished.
+    if (!stillPending && state.status === "pending" && session.busLocation) {
+      if (isWithinGeofence(session.busLocation, stop.location, stop.radiusMeters)) {
+        state.status = "boarded";
+      }
+    }
+  }
+  return { ok: true, alreadyBoarded: false, stopId: stop.id };
+}
+
+export function endRide(session: RideSession): void {
+  if (session.endedAt) return;
+  session.endedAt = new Date().toISOString();
+  // Anyone still waiting when the ride ends is simply recorded as missed.
+  for (const stopId of session.remainingStopIds) {
+    const st = session.stopStates[stopId];
+    for (const [sid, status] of Object.entries(st.studentStatuses)) {
+      if (status === "pending") st.studentStatuses[sid] = "missed";
+    }
+  }
+  session.busLocation = null; // location sharing is over - don't keep a stale position
 }
 
 /**
