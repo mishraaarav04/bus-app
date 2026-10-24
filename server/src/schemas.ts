@@ -19,11 +19,44 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 
+const lang = z.enum(["en", "es", "pt"]);
+const acceptTerms = z.boolean().refine((v) => v === true, "Please accept the terms and privacy policy to continue.");
+
 export const signupSchema = z.discriminatedUnion("role", [
-  z.object({ role: z.literal("student"), name, email, password, schoolCode: code }),
-  z.object({ role: z.literal("parent"), name, email, password, childCode: code }),
-  z.object({ role: z.literal("driver"), name, email, password, companyCode: code }),
+  z.object({ role: z.literal("student"), name, email, password, schoolCode: code, acceptTerms, lang: lang.optional() }),
+  z.object({ role: z.literal("parent"), name, email, password, childCode: code, acceptTerms, lang: lang.optional() }),
+  z.object({ role: z.literal("driver"), name, email, password, companyCode: code, acceptTerms, lang: lang.optional() }),
 ]);
+
+export const refreshSchema = z.object({ refreshToken: z.string().min(20).max(200) });
+export const logoutSchema = z.object({ refreshToken: z.string().min(20).max(200).optional() });
+export const forgotSchema = z.object({ email });
+export const resetSchema = z.object({
+  email,
+  code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code."),
+  newPassword: password,
+});
+export const verifyEmailSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code.") });
+export const deleteAccountSchema = z.object({ password: z.string().min(1).max(200) });
+
+export const prefsSchema = z.object({
+  lang: lang.optional(),
+  notifPrefs: z
+    .object({ approaching: z.boolean(), boarding: z.boolean(), delays: z.boolean() })
+    .partial()
+    .optional(),
+});
+
+export const pushRegisterSchema = z.object({
+  token: z.string().regex(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]+\]$/, "Invalid push token."),
+  platform: z.enum(["ios", "android"]),
+});
+export const pushUnregisterSchema = z.object({ token: z.string().min(10).max(200) });
+
+export const childSettingsSchema = z.object({
+  requiresAdultPickup: z.boolean().optional(),
+  authorizedPickups: z.array(z.string().trim().min(1).max(60)).max(5).optional(),
+});
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(200),
@@ -38,6 +71,9 @@ export const busSpecSchema = z.object({
   weightT: z.number().min(1).max(40),
 });
 
+const startTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour time like 07:15.");
+export const scheduleSchema = z.object({ startTime: startTime.nullable() });
+
 export const createSchoolSchema = z.object({
   name,
   email,
@@ -51,6 +87,7 @@ export const createRouteSchema = z.object({
   schoolId: z.string().uuid(),
   direction: z.enum(["to_school", "to_home"]),
   vehicle: busSpecSchema.optional(),
+  startTime: startTime.optional(),
   // Max 11: the Mapbox Optimization API takes 12 points and one is the school.
   stops: z
     .array(z.object({ name: z.string().trim().min(1).max(120), location: geoPoint }))
@@ -75,6 +112,9 @@ export const checkinSchema = z
   .object({
     token: z.string().min(10).max(2000).optional(),
     tagId: z.string().min(1).max(64).optional(),
+    // Set by the app so a retried or offline-queued scan is counted once.
+    scanId: z.string().min(8).max(64).optional(),
+    scannedAt: z.string().datetime().optional(),
   })
   .refine((v) => v.token || v.tagId, "token or tagId required");
 
@@ -84,9 +124,30 @@ export const geoSearchSchema = z.object({
   lng: z.coerce.number().min(-180).max(180).optional(),
 });
 
-export const sendMessageSchema = z.object({ body: z.string().trim().min(1).max(2000) });
-export const createConversationSchema = z.object({
-  kind: z.enum(["parent_group", "parent_driver", "admin_broadcast", "driver_admin"]),
+export const incidentSchema = z.object({
+  type: z.enum(["delay", "breakdown", "accident", "other"]),
+  delayMinutes: z.number().int().min(1).max(180).optional(),
+  note: z.string().trim().max(200).optional(),
+});
+export const dropoffSchema = z.object({
+  studentId: z.string().uuid(),
+  handedTo: z.string().trim().min(1).max(60).optional(),
+});
+export const endRideSchema = z.object({ force: z.boolean().optional() });
+
+export const absenceSchema = z.object({
+  studentId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  direction: z.enum(["to_school", "to_home", "both"]),
+});
+
+export const rosterSchema = z.object({
+  csv: z.string().min(1).max(600_000),
+  sendInvites: z.boolean().optional(),
+});
+
+export const reportQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   routeId: z.string().uuid().optional(),
-  participantIds: z.array(z.string().uuid()).max(100),
 });

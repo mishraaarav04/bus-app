@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../../api/client";
-import { Button, Card, Empty, ErrorText, Pill, Row } from "../../components/ui";
+import { Button, Card, Empty, ErrorText, Field, Pill, Row } from "../../components/ui";
 import { useActiveRides } from "../../hooks/useActiveRides";
 import { colors, font, formatDuration, formatMiles } from "../../theme";
 import { CompanyOverview, Route } from "../../types";
@@ -16,6 +16,7 @@ export function CompanyRoutesScreen() {
   const [building, setBuilding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [startDraft, setStartDraft] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -36,13 +37,32 @@ export function CompanyRoutesScreen() {
   const schoolName = (id?: string) => overview?.schools.find((s) => s.id === id)?.name ?? "School";
   const driverName = (id?: string) => overview?.drivers.find((d) => d.id === id)?.name;
 
+  // Keep the start-time box in step with whichever route is open.
+  useEffect(() => {
+    setStartDraft(open?.startTime ?? "");
+  }, [open?.id, open?.startTime]);
+
   async function assign(driverId: string | null) {
     if (!open) return;
     try {
       await api.assignDriver(open.id, driverId);
       await load();
+      // A substitute can take over a route that is already running; the old driver's ride moves across.
+      if (running.has(open.id)) Alert.alert("Driver changed", "The live ride was handed over to the new driver.");
     } catch (e: any) {
       Alert.alert("Couldn't assign", e.message);
+    }
+  }
+
+  async function saveStart() {
+    if (!open) return;
+    const v = startDraft.trim();
+    if (v && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return Alert.alert("Start time", "Use 24-hour time like 07:15.");
+    try {
+      await api.setSchedule(open.id, v || null);
+      await load();
+    } catch (e: any) {
+      Alert.alert("Couldn't save", e.message);
     }
   }
 
@@ -94,7 +114,7 @@ export function CompanyRoutesScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={font.h3}>{r.name}</Text>
                     <Text style={font.small}>
-                      {schoolName(r.schoolId)} · {r.stops.length} stops
+                      {schoolName(r.schoolId)} · {r.stops.length} stops{r.startTime ? ` · ${r.startTime}` : ""}
                       {r.totalDurationSec ? ` · ${formatDuration(r.totalDurationSec)} · ${formatMiles(r.totalDistanceM)}` : ""}
                     </Text>
                     <Text style={font.small}>Driver: {driverName(r.driverId) ?? "not assigned"}</Text>
@@ -130,7 +150,25 @@ export function CompanyRoutesScreen() {
                 </Row>
               ))}
 
+              <Text style={font.h3}>Usual start time</Text>
+              <Row>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    value={startDraft}
+                    onChangeText={setStartDraft}
+                    placeholder="07:15"
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={5}
+                    accessibilityLabel="Usual start time"
+                  />
+                </View>
+                <Button title="Save" variant="soft" onPress={saveStart} />
+              </Row>
+
               <Text style={font.h3}>Driver</Text>
+              {running.has(open.id) ? (
+                <Text style={font.small}>This route is running now. Picking a different driver hands the live ride over.</Text>
+              ) : null}
               {overview?.drivers.length ? (
                 <Row style={{ flexWrap: "wrap" }}>
                   {overview.drivers.map((d) => (

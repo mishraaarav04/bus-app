@@ -36,6 +36,7 @@ export function RouteBuilder({
   const [heightFt, setHeightFt] = useState(String(mToFt(spec.heightM)));
   const [widthFt, setWidthFt] = useState(String(mToFt(spec.widthM)));
   const [weightLb, setWeightLb] = useState(String(tToLb(spec.weightT)));
+  const [startTime, setStartTime] = useState("");
   const [stops, setStops] = useState<DraftStop[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,9 @@ export function RouteBuilder({
     const w = parseFloat(widthFt);
     const lb = parseFloat(weightLb);
     if (!(h > 0) || !(w > 0) || !(lb > 0)) return setError("Enter your bus height, width and weight.");
+    if (startTime.trim() && !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime.trim())) {
+      return setError("Start time should look like 07:15 (24-hour).");
+    }
     setBusy(true);
     try {
       const route = await api.createRoute({
@@ -57,6 +61,7 @@ export function RouteBuilder({
         schoolId,
         direction,
         vehicle: { heightM: ftToM(h), widthM: ftToM(w), weightT: lbToT(lb) },
+        startTime: startTime.trim() || undefined,
         stops: stops.map((s) => ({ name: s.name, location: { lat: s.lat, lng: s.lng } })),
       });
       setBuilt(route);
@@ -121,6 +126,15 @@ export function RouteBuilder({
         </Row>
 
         <Field label="Route name" value={name} onChangeText={setName} placeholder="Morning run - North" />
+        <Field
+          label="Usual start time (optional)"
+          value={startTime}
+          onChangeText={setStartTime}
+          placeholder="07:15"
+          keyboardType="numbers-and-punctuation"
+          maxLength={5}
+        />
+        <Text style={font.small}>Used to flag runs that start late in Reports.</Text>
 
         <Text style={font.h3}>School</Text>
         {overview.schools.length === 0 ? (

@@ -1,5 +1,7 @@
 import { routes } from "../data/store.js";
-import type { GeoPoint, RideSession, Route, User } from "../types.js";
+import { users } from "../data/store.js";
+import type { GeoPoint, Incident, RideSession, Route, User } from "../types.js";
+import { incidentsForRide, openDriverIncident } from "./incidents.js";
 import { myRidersOnRoute, nameOf } from "./access.js";
 import { distanceMeters } from "./geofence.js";
 
@@ -53,6 +55,17 @@ export interface StaffRideView {
   progress: ReturnType<typeof progress>;
   boardedCount: number;
   riderCount: number;
+  // Latest unresolved problem reported by the driver, and the ride's recent alerts.
+  incident: Incident | null;
+  alerts: Incident[];
+  // Per-student handoff rules (parents can require a named adult at pickup).
+  studentFlags: Record<string, { requiresAdultPickup: boolean; authorizedPickups: string[] }>;
+}
+
+export interface FamilyIncident {
+  type: Incident["type"];
+  delayMinutes: number | null;
+  createdAt: string;
 }
 
 export interface FamilyRideView {
@@ -66,6 +79,8 @@ export interface FamilyRideView {
   busLocation: GeoPoint | null;
   schoolLocation: GeoPoint;
   geometry?: [number, number][];
+  // Problem the driver reported and hasn't cleared (families never see the driver's notes).
+  incident: FamilyIncident | null;
   mine: {
     studentId: string;
     name: string;
@@ -75,6 +90,7 @@ export interface FamilyRideView {
     stopLocation: GeoPoint;
     etaSeconds: number | null;
     boardedAt: string | null;
+    droppedAt: string | null;
   }[];
 }
 
@@ -100,9 +116,11 @@ export function buildRideView(user: User, ride: RideSession): RideView | null {
           stopLocation: stop.location,
           etaSeconds: st?.status === "skipped" ? null : st?.etaSeconds ?? null,
           boardedAt: ride.boardedAt?.[sid] ?? null,
+          droppedAt: ride.droppedAt?.[sid]?.at ?? null,
         });
       }
     }
+    const open = openDriverIncident(ride.id);
     return {
       kind: "family",
       id: ride.id,
@@ -114,6 +132,7 @@ export function buildRideView(user: User, ride: RideSession): RideView | null {
       busLocation: ride.busLocation,
       schoolLocation: route.schoolLocation,
       geometry: route.geometry,
+      incident: open ? { type: open.type, delayMinutes: open.delayMinutes, createdAt: open.createdAt } : null,
       mine,
     };
   }
@@ -122,6 +141,16 @@ export function buildRideView(user: User, ride: RideSession): RideView | null {
   for (const s of route.stops) for (const id of s.studentIds) names[id] = nameOf(id);
   const riderCount = route.stops.reduce((n, s) => n + s.studentIds.length, 0);
   const boardedCount = Object.keys(ride.boardedAt ?? {}).length;
+  const studentFlags: StaffRideView["studentFlags"] = {};
+  for (const s of route.stops) {
+    for (const id of s.studentIds) {
+      const stu = users.get(id);
+      studentFlags[id] = {
+        requiresAdultPickup: stu?.requiresAdultPickup ?? false,
+        authorizedPickups: stu?.authorizedPickups ?? [],
+      };
+    }
+  }
   return {
     kind: "staff",
     session: ride,
@@ -131,5 +160,8 @@ export function buildRideView(user: User, ride: RideSession): RideView | null {
     progress: progress(ride, route),
     boardedCount,
     riderCount,
+    incident: openDriverIncident(ride.id) ?? null,
+    alerts: incidentsForRide(ride.id),
+    studentFlags,
   };
 }

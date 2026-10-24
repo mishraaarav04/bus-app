@@ -1,8 +1,11 @@
 import { Router } from "express";
+import express from "express";
 import { routes as routeStore, users } from "../data/store.js";
 import { requireAuth, requireRole } from "../security/auth.js";
-import { assignStudentSchema } from "../schemas.js";
+import { assignStudentSchema, rosterSchema } from "../schemas.js";
 import { activeRideFor } from "../services/access.js";
+import { audit } from "../services/audit.js";
+import { importRoster, RosterError } from "../services/roster.js";
 
 export const schoolRouter = Router();
 schoolRouter.use("/school", requireAuth, requireRole("admin"));
@@ -16,7 +19,11 @@ schoolRouter.get("/school/students", (req, res) => {
     .map((s) => ({
       id: s.id,
       name: s.name,
-      email: s.email,
+      email: s.email.endsWith(".invalid") ? "" : s.email,
+      // Roster students who haven't set a password yet; the school can hand parents this code.
+      claimed: s.claimed !== false,
+      linkCode: s.linkCode,
+      tagId: s.tagId,
       assignments: myRoutes.flatMap((r) =>
         r.stops
           .filter((st) => st.studentIds.includes(s.id))
@@ -49,5 +56,51 @@ schoolRouter.post("/school/assignments", (req, res) => {
     stop.studentIds = stop.studentIds.filter((id) => id !== studentId);
     if (stop.id === stopId) stop.studentIds.push(studentId);
   }
+  audit(
+    school,
+    {
+      action: "assignment.set",
+      targetType: "student",
+      targetId: studentId,
+      meta: { student: student.name, route: route.name, stop: route.stops.find((s) => s.id === stopId)?.name ?? null },
+    },
+    req
+  );
   res.json({ ok: true });
+});
+
+// ---- roster import (CSV) -----------------------------------------------------------
+// Own, larger body limit: the global one is 50 KB (see app.ts, which skips this path).
+const bigJson = express.json({ limit: "1mb" });
+
+async function roster(dryRun: boolean, req: express.Request, res: express.Response) {
+  const parsed = rosterSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Paste or choose a CSV file first." });
+  try {
+    const report = await importRoster(req.user!, parsed.data.csv, {
+      dryRun,
+      sendInvites: Boolean(parsed.data.sendInvites),
+    });
+    if (!dryRun) {
+      audit(
+        req.user!,
+        {
+          action: "roster.import",
+          meta: { created: report.created, updated: report.updated, errors: report.errors, invites: report.invitesSent },
+        },
+        req
+      );
+    }
+    res.json(report);
+  } catch (e) {
+    if (e instanceof RosterError) return res.status(400).json({ error: e.message });
+    throw e;
+  }
+}
+
+schoolRouter.post("/school/roster/preview", bigJson, (req, res, next) => {
+  roster(true, req, res).catch(next);
+});
+schoolRouter.post("/school/roster/import", bigJson, (req, res, next) => {
+  roster(false, req, res).catch(next);
 });

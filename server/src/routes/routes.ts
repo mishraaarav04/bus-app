@@ -1,9 +1,12 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
-import { routes as routeStore, users } from "../data/store.js";
+import { rideSessions, routes as routeStore, users } from "../data/store.js";
 import { requireAuth, requireRole } from "../security/auth.js";
-import { assignDriverSchema, createRouteSchema } from "../schemas.js";
+import { assignDriverSchema, createRouteSchema, scheduleSchema } from "../schemas.js";
 import { activeRideFor, canViewRoute } from "../services/access.js";
+import { audit } from "../services/audit.js";
+import { notifyUsers } from "../services/notify.js";
+import { broadcastRide, emitRideRemoved } from "../services/rideBroadcast.js";
 import { MapboxError, mapboxEnabled } from "../services/mapbox.js";
 import { planRoute } from "../services/routePlanner.js";
 import { scopeRoute } from "../services/rideViews.js";
@@ -48,6 +51,7 @@ routesRouter.post("/routes", requireRole("company"), async (req, res) => {
       schoolId: school.id,
       status: "draft",
       vehicle,
+      startTime: d.startTime,
       stops: plan.order.map((inputIdx, order) => ({
         id: randomUUID(),
         name: d.stops[inputIdx].name,
@@ -62,6 +66,7 @@ routesRouter.post("/routes", requireRole("company"), async (req, res) => {
       clearanceChecked: true,
     };
     routeStore.set(route.id, route);
+    audit(company, { action: "route.create", targetType: "route", targetId: route.id, schoolId: school.id, meta: { name: route.name } }, req);
     res.status(201).json(route);
   } catch (e) {
     const err = e instanceof MapboxError ? e : new MapboxError("Couldn't build the route.");
@@ -88,6 +93,18 @@ routesRouter.post("/routes/:id/send", requireRole("company"), (req, res) => {
   const route = routeStore.get(req.params.id);
   if (!route || route.companyId !== req.user!.id) return res.status(404).json({ error: "Route not found." });
   route.status = "sent";
+  audit(req.user!, { action: "route.send", targetType: "route", targetId: route.id, schoolId: route.schoolId, meta: { name: route.name } }, req);
+  res.json(route);
+});
+
+// When the run is supposed to start. Reports use it to show late starts.
+routesRouter.put("/routes/:id/schedule", requireRole("company"), (req, res) => {
+  const route = routeStore.get(req.params.id);
+  if (!route || route.companyId !== req.user!.id) return res.status(404).json({ error: "Route not found." });
+  const parsed = scheduleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid time." });
+  route.startTime = parsed.data.startTime ?? undefined;
+  audit(req.user!, { action: "route.schedule", targetType: "route", targetId: route.id, schoolId: route.schoolId, meta: { startTime: route.startTime ?? null } }, req);
   res.json(route);
 });
 
@@ -96,17 +113,37 @@ routesRouter.put("/routes/:id/driver", requireRole("company"), (req, res) => {
   if (!route || route.companyId !== req.user!.id) return res.status(404).json({ error: "Route not found." });
   const parsed = assignDriverSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Pick a driver." });
-  if (activeRideFor(route.id)) return res.status(409).json({ error: "A ride is in progress on this route." });
+  const active = activeRideFor(route.id);
 
-  if (parsed.data.driverId) {
-    const driver = users.get(parsed.data.driverId);
-    if (!driver || driver.role !== "driver" || driver.companyId !== req.user!.id) {
-      return res.status(400).json({ error: "Choose one of your drivers." });
-    }
-    route.driverId = driver.id;
-  } else {
+  if (!parsed.data.driverId) {
+    if (active) return res.status(409).json({ error: "A ride is in progress on this route." });
     route.driverId = undefined;
+    audit(req.user!, { action: "route.driver_clear", targetType: "route", targetId: route.id, schoolId: route.schoolId }, req);
+    return res.json(route);
   }
+
+  const driver = users.get(parsed.data.driverId);
+  if (!driver || driver.role !== "driver" || driver.companyId !== req.user!.id) {
+    return res.status(400).json({ error: "Choose one of your drivers." });
+  }
+
+  if (active && active.driverId !== driver.id) {
+    // Substitute driver: the live ride moves to the new driver's phone.
+    const busy = [...rideSessions.values()].find((r) => !r.endedAt && r.driverId === driver.id && r.id !== active.id);
+    if (busy) return res.status(409).json({ error: `${driver.name} is already driving another route.` });
+    const previous = active.driverId;
+    active.driverId = driver.id;
+    route.driverId = driver.id;
+    emitRideRemoved(previous, active.id);
+    notifyUsers([driver.id], { kind: "assigned", params: { route: route.name }, data: { rideId: active.id } });
+    notifyUsers([previous], { kind: "removed", params: { route: route.name }, data: { rideId: active.id } });
+    broadcastRide(active);
+    audit(req.user!, { action: "ride.handover", targetType: "ride", targetId: active.id, schoolId: route.schoolId, meta: { route: route.name, to: driver.name } }, req);
+    return res.json(route);
+  }
+
+  route.driverId = driver.id;
+  audit(req.user!, { action: "route.driver_assign", targetType: "route", targetId: route.id, schoolId: route.schoolId, meta: { driver: driver.name, route: route.name } }, req);
   res.json(route);
 });
 
@@ -115,5 +152,6 @@ routesRouter.delete("/routes/:id", requireRole("company"), (req, res) => {
   if (!route || route.companyId !== req.user!.id) return res.status(404).json({ error: "Route not found." });
   if (activeRideFor(route.id)) return res.status(409).json({ error: "A ride is in progress on this route." });
   routeStore.delete(route.id);
+  audit(req.user!, { action: "route.delete", targetType: "route", targetId: route.id, schoolId: route.schoolId, meta: { name: route.name } }, req);
   res.json({ ok: true });
 });

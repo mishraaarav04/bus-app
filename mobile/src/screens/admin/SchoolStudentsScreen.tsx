@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../../api/client";
 import { Avatar, Button, Card, Empty, ErrorText, Pill, Row } from "../../components/ui";
 import { colors, font } from "../../theme";
+import { RosterImport } from "./RosterImport";
 import { Route, SchoolStudent } from "../../types";
 
 export function SchoolStudentsScreen() {
@@ -12,6 +13,7 @@ export function SchoolStudentsScreen() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [editing, setEditing] = useState<SchoolStudent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -49,6 +51,7 @@ export function SchoolStudentsScreen() {
           <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: 2, color: colors.primaryDark }}>{code}</Text>
           <Button title="Share code" variant="soft" onPress={() => Share.share({ message: `Join Wheelie with school code ${code}` })} />
         </Card>
+        <Button title="Import a student list (CSV)" variant="outline" onPress={() => setImporting(true)} />
         <ErrorText text={error} />
         {students.length === 0 ? (
           <Empty title="No students yet" hint="Students appear here after they sign up with your code." />
@@ -65,14 +68,24 @@ export function SchoolStudentsScreen() {
                         ? s.assignments.map((a) => `${a.routeName}: ${a.stopName}`).join("\n")
                         : "No stop assigned"}
                     </Text>
+                    {!s.claimed && s.linkCode ? (
+                      <Text style={font.small} selectable>
+                        Parent code: {s.linkCode}
+                      </Text>
+                    ) : null}
                   </View>
-                  <Pill text={s.assignments.length ? "Assigned" : "Assign"} tone={s.assignments.length ? "green" : "amber"} />
+                  <View style={{ gap: 6, alignItems: "flex-end" }}>
+                    <Pill text={s.assignments.length ? "Assigned" : "Assign"} tone={s.assignments.length ? "green" : "amber"} />
+                    {!s.claimed ? <Pill text="No login yet" tone="gray" /> : null}
+                  </View>
                 </Row>
               </Card>
             </Pressable>
           ))
         )}
       </ScrollView>
+
+      <RosterImport visible={importing} onClose={() => setImporting(false)} onImported={load} />
 
       <Modal visible={Boolean(editing)} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditing(null)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.white }}>

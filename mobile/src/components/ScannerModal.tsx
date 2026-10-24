@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, font, radius } from "../theme";
+import { useT } from "../i18n";
 import { Button } from "./ui";
 
 /**
@@ -17,25 +18,26 @@ export function ScannerModal({
   visible: boolean;
   onClose: () => void;
   // Resolve with a message to show; reject to show an error.
-  onScan: (token: string) => Promise<string>;
+  onScan: (token: string) => Promise<{ text: string; tone: "ok" | "warn" }>;
 }) {
+  const { t } = useT();
   const [permission, requestPermission] = useCameraPermissions();
-  const [result, setResult] = useState<{ text: string; ok: boolean } | null>(null);
+  const [result, setResult] = useState<{ text: string; tone: "ok" | "warn" | "error" } | null>(null);
   const busy = useRef(false);
 
   async function handle(data: string) {
     if (busy.current) return;
     busy.current = true;
     try {
-      setResult({ text: await onScan(data), ok: true });
+      setResult(await onScan(data));
     } catch (e: any) {
-      setResult({ text: e.message ?? "Scan failed", ok: false });
+      setResult({ text: e.message ?? t("scan.failed"), tone: "error" });
     }
     // Pause briefly so the same code isn't read twice.
     setTimeout(() => {
       setResult(null);
       busy.current = false;
-    }, 1800);
+    }, 2200);
   }
 
   return (
@@ -50,11 +52,11 @@ export function ScannerModal({
           />
         ) : (
           <View style={styles.center}>
-            <Text style={[font.h2, { color: colors.white, textAlign: "center" }]}>Camera access needed</Text>
+            <Text style={[font.h2, { color: colors.white, textAlign: "center" }]}>{t("scan.cameraNeeded")}</Text>
             <Text style={{ color: colors.primaryTint, textAlign: "center", marginVertical: 10 }}>
-              Wheelie uses the camera only to scan students' boarding codes.
+              {t("scan.cameraWhy")}
             </Text>
-            <Button title="Allow camera" onPress={requestPermission} />
+            <Button title={t("scan.allowCamera")} onPress={requestPermission} />
           </View>
         )}
 
@@ -63,16 +65,22 @@ export function ScannerModal({
         </View>
 
         {result ? (
-          <View style={[styles.toast, { backgroundColor: result.ok ? colors.success : colors.danger }]}>
-            <Ionicons name={result.ok ? "checkmark-circle" : "alert-circle"} size={26} color={colors.white} />
+          <View
+            accessibilityLiveRegion="assertive"
+            style={[
+              styles.toast,
+              { backgroundColor: result.tone === "ok" ? colors.success : result.tone === "warn" ? colors.warning : colors.danger },
+            ]}
+          >
+            <Ionicons name={result.tone === "ok" ? "checkmark-circle" : "alert-circle"} size={26} color={colors.white} />
             <Text style={styles.toastText}>{result.text}</Text>
           </View>
         ) : (
-          <Text style={styles.hint}>Point at the student's boarding code</Text>
+          <Text style={styles.hint}>{t("scan.hint")}</Text>
         )}
 
-        <Pressable style={styles.close} onPress={onClose}>
-          <Text style={styles.closeText}>Done</Text>
+        <Pressable style={styles.close} onPress={onClose} accessibilityRole="button" accessibilityLabel={t("common.done")}>
+          <Text style={styles.closeText}>{t("common.done")}</Text>
         </Pressable>
       </View>
     </Modal>

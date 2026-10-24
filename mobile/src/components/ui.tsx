@@ -11,6 +11,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { colors, font, radius } from "../theme";
+import type { TFn } from "../i18n";
 
 export function Button({
   title,
@@ -32,6 +33,9 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       style={({ pressed }) => [
         styles.button,
         v.box,
@@ -65,6 +69,7 @@ export function Field({
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         placeholderTextColor="#B5A598"
+        accessibilityLabel={label ?? props.placeholder}
         {...props}
         style={[styles.input, error ? { borderColor: colors.danger } : null, props.style]}
       />
@@ -94,16 +99,16 @@ export function Pill({ text, tone = "gray" }: { text: string; tone?: PillTone })
   );
 }
 
-export function statusPill(status: string): { text: string; tone: PillTone } {
+export function statusPill(status: string, t: TFn): { text: string; tone: PillTone } {
   switch (status) {
     case "boarded":
-      return { text: "On the bus", tone: "green" };
+      return { text: t("status.boarded"), tone: "green" };
     case "missed":
-      return { text: "Missed the bus", tone: "red" };
+      return { text: t("status.missed"), tone: "red" };
     case "skipped":
-      return { text: "Not riding today", tone: "gray" };
+      return { text: t("status.skipped"), tone: "gray" };
     default:
-      return { text: "Waiting", tone: "amber" };
+      return { text: t("status.waiting"), tone: "amber" };
   }
 }
 
@@ -116,6 +121,8 @@ export function Avatar({ name, size = 44, tone = colors.primary }: { name: strin
     .toUpperCase();
   return (
     <View
+      accessibilityRole="image"
+      accessibilityLabel={name}
       style={{
         width: size,
         height: size,
@@ -137,13 +144,17 @@ export function Row({ children, style }: { children: React.ReactNode; style?: St
 }
 
 export function ErrorText({ text }: { text?: string | null }) {
-  return text ? <Text style={styles.error}>{text}</Text> : null;
+  return text ? (
+    <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+      {text}
+    </Text>
+  ) : null;
 }
 
 export function Empty({ title, hint }: { title: string; hint?: string }) {
   return (
     <View style={{ alignItems: "center", paddingVertical: 24, gap: 4 }}>
-      <Text style={font.h3}>{title}</Text>
+      <Text style={font.h3} accessibilityRole="header">{title}</Text>
       {hint ? <Text style={[font.small, { textAlign: "center" }]}>{hint}</Text> : null}
     </View>
   );

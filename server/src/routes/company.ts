@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { findUserByEmail, users } from "../data/store.js";
 import { hashPassword, makeCode, requireAuth, requireRole, toPublicUser } from "../security/auth.js";
 import { busSpecSchema, createSchoolSchema } from "../schemas.js";
+import { audit } from "../services/audit.js";
+import { DEFAULT_PREFS } from "../types.js";
 import type { User } from "../types.js";
 
 export const companyRouter = Router();
@@ -53,8 +55,18 @@ companyRouter.post("/company/schools", async (req, res) => {
     address: d.address,
     location: d.location,
     studentCode: makeCode("SCH"),
+    createdAt: new Date().toISOString(),
+    tokenVersion: 0,
+    emailVerified: false,
+    claimed: true,
+    lang: "en",
+    notifPrefs: { ...DEFAULT_PREFS },
   };
+  if (findUserByEmail(d.email)) {
+    return res.status(409).json({ error: "An account with that email already exists." });
+  }
   users.set(school.id, school);
+  audit(req.user!, { action: "school.create", targetType: "school", targetId: school.id, schoolId: school.id, meta: { name: school.name } }, req);
   res.status(201).json({ ...toPublicUser(school), location: school.location });
 });
 
@@ -62,5 +74,6 @@ companyRouter.put("/company/bus-spec", (req, res) => {
   const parsed = busSpecSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Check the bus dimensions." });
   req.user!.busSpec = parsed.data;
+  audit(req.user!, { action: "company.bus_spec", meta: parsed.data }, req);
   res.json(parsed.data);
 });

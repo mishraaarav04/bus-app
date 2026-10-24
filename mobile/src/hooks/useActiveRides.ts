@@ -33,11 +33,15 @@ export function useActiveRides() {
         return ended ? rest : [...rest, view];
       });
     };
+    // Sent when a ride vanishes for this user (e.g. the route was handed to another driver).
+    const onRemoved = (p: { rideId: string }) => setRides((prev) => prev.filter((r) => rideIdOf(r) !== p?.rideId));
+    socket?.on("ride:removed", onRemoved);
     socket?.on("ride:update", onUpdate);
     socket?.on("ride:started", onUpdate);
     socket?.on("connect", refresh);
     const sub = AppState.addEventListener("change", (s) => s === "active" && refresh());
     return () => {
+      socket?.off("ride:removed", onRemoved);
       socket?.off("ride:update", onUpdate);
       socket?.off("ride:started", onUpdate);
       socket?.off("connect", refresh);

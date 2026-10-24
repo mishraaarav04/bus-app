@@ -1,0 +1,29 @@
+# Example Fly.io config: fly launch --no-deploy --copy-config   (then see ../docs/DEPLOY.md)
+app = "wheelie-server"
+primary_region = "ewr"
+
+[build]
+
+[env]
+  PORT = "8080"
+  DB_PATH = "/data/wheelie.db"
+  TRUST_PROXY = "1"
+  REQUIRE_HTTPS = "true"
+  SCHOOL_TIMEZONE = "America/New_York"
+
+[mounts]
+  source = "wheelie_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"     # keep running: buses report location all day
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"

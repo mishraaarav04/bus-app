@@ -3,12 +3,14 @@ import { ActivityIndicator, Text, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { api } from "../api/client";
 import { colors, font } from "../theme";
+import { useT } from "../i18n";
 
 /**
  * The student's tap-in code. It's a signed token that expires in under a
  * minute and refreshes itself, so a screenshot is useless to anyone else.
  */
 export function BoardingPass() {
+  const { t } = useT();
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [left, setLeft] = useState(0);
@@ -46,9 +48,9 @@ export function BoardingPass() {
       <View style={{ padding: 18, backgroundColor: colors.white, borderRadius: 24, borderWidth: 3, borderColor: colors.primary }}>
         {token ? <QRCode value={token} size={220} color={colors.ink} /> : <ActivityIndicator color={colors.primary} />}
       </View>
-      <Text style={font.h3}>Show this to your driver</Text>
+      <Text style={font.h3}>{t("pass.show")}</Text>
       <Text style={[font.small, { textAlign: "center" }]}>
-        The code changes every few seconds, so a screenshot won't work.
+        {t("pass.why")}
       </Text>
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
     </View>

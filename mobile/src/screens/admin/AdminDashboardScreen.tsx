@@ -8,6 +8,23 @@ import { useActiveRides } from "../../hooks/useActiveRides";
 import { colors, font, formatEta, formatMiles } from "../../theme";
 import { Route, StaffRideView } from "../../types";
 
+function incidentLabel(i: { type: string; delayMinutes: number | null }): string {
+  switch (i.type) {
+    case "delay":
+      return i.delayMinutes ? `Delayed ~${i.delayMinutes} min` : "Delayed";
+    case "breakdown":
+      return "Bus breakdown";
+    case "accident":
+      return "Accident reported";
+    case "off_route":
+      return "Off route";
+    case "stopped":
+      return "Stopped for a while";
+    default:
+      return "Driver reported a problem";
+  }
+}
+
 function ProgressBar({ value }: { value: number }) {
   return (
     <View style={{ height: 10, borderRadius: 5, backgroundColor: colors.primarySoft, overflow: "hidden" }}>
@@ -78,6 +95,11 @@ export function AdminDashboardScreen() {
                   </View>
                   <Pill text={ride ? "Running" : "Not running"} tone={ride ? "green" : "gray"} />
                 </Row>
+                {(() => {
+                  // The driver's own report, or an automatic alert (off route / stopped) still open.
+                  const inc = ride?.incident ?? ride?.alerts?.find((a) => !a.resolvedAt);
+                  return inc ? <Pill text={incidentLabel(inc)} tone={inc.type === "delay" ? "amber" : "red"} /> : null;
+                })()}
                 {ride && p ? (
                   <>
                     <ProgressBar value={p.total ? (p.completed + p.skipped) / p.total : 0} />

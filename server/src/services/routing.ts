@@ -74,17 +74,19 @@ export function startRideSession(
 export function checkInStudent(
   session: RideSession,
   route: Route,
-  studentId: string
-): { ok: boolean; alreadyBoarded: boolean; stopId: string | null } {
+  studentId: string,
+  at: Date = new Date()
+): { ok: boolean; alreadyBoarded: boolean; stopId: string | null; previous: BoardingStatus | null } {
   const stop = route.stops.find((s) => s.studentIds.includes(studentId));
   const state = stop && session.stopStates[stop.id];
-  if (!stop || !state) return { ok: false, alreadyBoarded: false, stopId: null };
+  if (!stop || !state) return { ok: false, alreadyBoarded: false, stopId: null, previous: null };
 
-  if (state.studentStatuses[studentId] === "boarded") {
-    return { ok: true, alreadyBoarded: true, stopId: stop.id };
+  const previous = state.studentStatuses[studentId] ?? "pending";
+  if (previous === "boarded") {
+    return { ok: true, alreadyBoarded: true, stopId: stop.id, previous };
   }
   state.studentStatuses[studentId] = "boarded";
-  session.boardedAt = { ...(session.boardedAt ?? {}), [studentId]: new Date().toISOString() };
+  session.boardedAt = { ...(session.boardedAt ?? {}), [studentId]: at.toISOString() };
 
   if (session.remainingStopIds.includes(stop.id) && state.status !== "skipped") {
     const stillPending = stop.studentIds.some((id) => state.studentStatuses[id] === "pending");
@@ -96,20 +98,26 @@ export function checkInStudent(
       }
     }
   }
-  return { ok: true, alreadyBoarded: false, stopId: stop.id };
+  return { ok: true, alreadyBoarded: false, stopId: stop.id, previous };
 }
 
-export function endRide(session: RideSession): void {
-  if (session.endedAt) return;
+/** Ends the ride. Returns the students who were still waiting and are now recorded as missed. */
+export function endRide(session: RideSession): string[] {
+  if (session.endedAt) return [];
   session.endedAt = new Date().toISOString();
   // Anyone still waiting when the ride ends is simply recorded as missed.
+  const missed: string[] = [];
   for (const stopId of session.remainingStopIds) {
     const st = session.stopStates[stopId];
     for (const [sid, status] of Object.entries(st.studentStatuses)) {
-      if (status === "pending") st.studentStatuses[sid] = "missed";
+      if (status === "pending") {
+        st.studentStatuses[sid] = "missed";
+        missed.push(sid);
+      }
     }
   }
   session.busLocation = null; // location sharing is over - don't keep a stale position
+  return missed;
 }
 
 /**
@@ -136,6 +144,10 @@ export function markStudentNotRiding(
     return { rerouted: false, skippedStopId: null };
   }
 
+  // Already on the bus (or already marked): nothing to skip.
+  if ((stopState.studentStatuses[studentId] ?? "pending") !== "pending") {
+    return { rerouted: false, skippedStopId: null };
+  }
   stopState.studentStatuses[studentId] = "skipped";
 
   const anyoneElseStillPending = stop.studentIds.some(
@@ -214,13 +226,16 @@ export function advancePastStop(
   session: RideSession,
   route: Route,
   stopId: string
-): void {
+): string[] {
   const stopState = session.stopStates[stopId];
-  if (!stopState || !session.remainingStopIds.includes(stopId)) return;
+  if (!stopState || !session.remainingStopIds.includes(stopId)) return [];
 
+  // Anyone who never tapped in by the time the bus leaves is recorded as missed.
+  const newlyMissed: string[] = [];
   for (const [studentId, status] of Object.entries(stopState.studentStatuses)) {
     if (status === "pending") {
       stopState.studentStatuses[studentId] = "missed";
+      newlyMissed.push(studentId);
     }
   }
 
@@ -235,6 +250,7 @@ export function advancePastStop(
   session.completedStopIds.push(stopId);
 
   recomputeEtas(session, route);
+  return newlyMissed;
 }
 
 export function updateBusLocation(

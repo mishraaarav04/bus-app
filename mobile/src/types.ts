@@ -1,6 +1,13 @@
 // Mirrors server/src/types.ts (views the server sends). Kept by hand.
 
 export type Role = "student" | "parent" | "driver" | "company" | "admin";
+export type Lang = "en" | "es" | "pt";
+
+export interface NotifPrefs {
+  approaching: boolean;
+  boarding: boolean;
+  delays: boolean;
+}
 
 export interface User {
   id: string;
@@ -15,6 +22,18 @@ export interface User {
   studentCode?: string;
   busSpec?: BusSpec;
   address?: string;
+  emailVerified: boolean;
+  lang: Lang;
+  notifPrefs: NotifPrefs;
+  requiresAdultPickup?: boolean;
+  authorizedPickups?: string[];
+}
+
+export interface Child {
+  id: string;
+  name: string;
+  requiresAdultPickup: boolean;
+  authorizedPickups: string[];
 }
 
 export interface GeoPoint {
@@ -49,6 +68,7 @@ export interface Route {
   schoolId?: string;
   status?: "draft" | "sent";
   vehicle?: BusSpec;
+  startTime?: string;
   geometry?: [number, number][];
   totalDurationSec?: number;
   totalDistanceM?: number;
@@ -60,6 +80,12 @@ export interface StopRideState {
   status: BoardingStatus;
   studentStatuses: Record<string, BoardingStatus>;
   etaSeconds: number | null;
+}
+
+export interface DropOff {
+  at: string;
+  stopId: string | null;
+  handedTo?: string;
 }
 
 export interface RideSession {
@@ -74,6 +100,27 @@ export interface RideSession {
   stopStates: Record<string, StopRideState>;
   completedStopIds: string[];
   boardedAt?: Record<string, string>;
+  droppedAt?: Record<string, DropOff>;
+}
+
+export type IncidentType = "delay" | "breakdown" | "accident" | "other" | "off_route" | "stopped";
+
+export interface Incident {
+  id: string;
+  rideId: string;
+  routeId: string;
+  type: IncidentType;
+  source: "driver" | "system";
+  delayMinutes: number | null;
+  note: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export interface FamilyIncident {
+  type: IncidentType;
+  delayMinutes: number | null;
+  createdAt: string;
 }
 
 export interface StaffRideView {
@@ -91,6 +138,9 @@ export interface StaffRideView {
   };
   boardedCount: number;
   riderCount: number;
+  incident: Incident | null;
+  alerts: Incident[];
+  studentFlags: Record<string, { requiresAdultPickup: boolean; authorizedPickups: string[] }>;
 }
 
 export interface FamilyRideView {
@@ -104,6 +154,7 @@ export interface FamilyRideView {
   busLocation: GeoPoint | null;
   schoolLocation: GeoPoint;
   geometry?: [number, number][];
+  incident: FamilyIncident | null;
   mine: {
     studentId: string;
     name: string;
@@ -113,6 +164,7 @@ export interface FamilyRideView {
     stopLocation: GeoPoint;
     etaSeconds: number | null;
     boardedAt: string | null;
+    droppedAt: string | null;
   }[];
 }
 
@@ -146,14 +198,107 @@ export interface SchoolStudent {
   id: string;
   name: string;
   email: string;
+  claimed: boolean;
+  linkCode?: string;
+  tagId?: string;
   assignments: { routeId: string; routeName: string; stopId: string; stopName: string }[];
 }
 
-export interface ChatMessage {
+export interface AppNotification {
   id: string;
-  conversationId: string;
-  senderId: string;
-  senderRole: Role;
+  kind: string;
+  title: string;
   body: string;
-  sentAt: string;
+  data: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface Absence {
+  studentId: string;
+  studentName: string;
+  date: string;
+  direction: "to_school" | "to_home" | "both";
+}
+
+export interface CheckinResult {
+  name: string;
+  alreadyBoarded: boolean;
+  duplicate?: boolean;
+  warning?: { code: string; message: string };
+}
+
+export interface ReportTotals {
+  rides: number;
+  riders: number;
+  boarded: number;
+  missed: number;
+  skipped: number;
+  dropped: number;
+  incidents: number;
+  boardedPct: number | null;
+  scheduledRides: number;
+  onTimeRides: number;
+  avgLateMin: number | null;
+}
+
+export interface ReportSummary {
+  from: string;
+  to: string;
+  totals: ReportTotals;
+  routes: (ReportTotals & { routeId: string; routeName: string })[];
+  rides: {
+    rideId: string;
+    routeName: string;
+    direction: "to_school" | "to_home";
+    driverName: string | null;
+    date: string;
+    startedAt: string;
+    endedAt: string;
+    lateMin: number | null;
+    riders: number;
+    boarded: number;
+    missed: number;
+    skipped: number;
+    incidents: number;
+  }[];
+}
+
+export interface AuditRow {
+  id: number;
+  at: string;
+  actorName: string | null;
+  actorRole: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  meta: Record<string, unknown> | null;
+}
+
+export interface RosterRowResult {
+  line: number;
+  name: string;
+  status: "created" | "updated" | "error";
+  message?: string;
+  linkCode?: string;
+  warnings: string[];
+}
+
+export interface RosterReport {
+  dryRun: boolean;
+  created: number;
+  updated: number;
+  errors: number;
+  invitesSent: number;
+  rows: RosterRowResult[];
+}
+
+export interface HistoryEvent {
+  date: string;
+  routeName: string;
+  direction: "to_school" | "to_home";
+  stopName: string | null;
+  status: BoardingStatus;
+  boardedAt: string | null;
+  droppedAt: string | null;
 }

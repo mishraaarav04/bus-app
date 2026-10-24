@@ -5,6 +5,17 @@
 // buses and students. "company" is a bus company.
 export type Role = "student" | "parent" | "driver" | "company" | "admin";
 
+export type Lang = "en" | "es" | "pt";
+
+/** Which push/inbox alerts a family member wants. Staff alerts are always on. */
+export interface NotifPrefs {
+  approaching: boolean; // "bus is on its way", "arrives in 5 min"
+  boarding: boolean; // boarded, missed, dropped off, arrived at school
+  delays: boolean; // late, breakdown, accident
+}
+
+export const DEFAULT_PREFS: NotifPrefs = { approaching: true, boarding: true, delays: true };
+
 export interface User {
   id: string;
   role: Role;
@@ -14,6 +25,18 @@ export interface User {
   failedLogins: number;
   lockedUntil: number; // epoch ms, 0 = not locked
 
+  createdAt?: string;
+  // Bumped on password change/reset/delete: access tokens carrying an older
+  // value stop working immediately.
+  tokenVersion?: number;
+  emailVerified?: boolean;
+  // false for students a school pre-loaded from a roster who haven't set a
+  // password yet. They can't sign in until they do ("Forgot password").
+  claimed?: boolean;
+  lang?: Lang;
+  notifPrefs?: NotifPrefs;
+  consent?: { termsVersion: string; acceptedAt: string };
+
   // driver -> company, school(admin) -> company that created it
   companyId?: string;
   // student -> school(admin) user id
@@ -22,6 +45,9 @@ export interface User {
   // student
   linkCode?: string; // parent enters this to link their child
   tagId?: string; // static NFC card id (optional, for physical cards later)
+  // Set by a parent: the driver must hand this child to a named adult.
+  requiresAdultPickup?: boolean;
+  authorizedPickups?: string[];
   // parent
   linkedStudentIds?: string[];
 
@@ -48,6 +74,11 @@ export interface PublicUser {
   studentCode?: string;
   busSpec?: BusSpec;
   address?: string;
+  emailVerified: boolean;
+  lang: Lang;
+  notifPrefs: NotifPrefs;
+  requiresAdultPickup?: boolean;
+  authorizedPickups?: string[];
 }
 
 export interface GeoPoint {
@@ -85,6 +116,9 @@ export interface Route {
   schoolId?: string; // the school (admin user) this route belongs to
   status?: "draft" | "sent";
   vehicle?: BusSpec;
+  // Scheduled start of the run, "HH:MM" in the school's timezone. Optional;
+  // when set, reports show how late each run started.
+  startTime?: string;
   // Road geometry from Mapbox Directions (GeoJSON [lng, lat] pairs). Absent
   // for hand-built/demo routes, in which case clients draw straight lines.
   geometry?: [number, number][];
@@ -99,6 +133,12 @@ export interface StopRideState {
   studentStatuses: Record<string, BoardingStatus>;
   etaSeconds: number | null;
   skippedReason?: "no_riders" | "manual_skip";
+}
+
+export interface DropOff {
+  at: string; // ISO time
+  stopId: string | null; // null = dropped at school
+  handedTo?: string; // adult the child was handed to, when required
 }
 
 export interface RideSession {
@@ -116,20 +156,39 @@ export interface RideSession {
   completedStopIds: string[];
   // studentId -> ISO time they were checked in on the bus
   boardedAt?: Record<string, string>;
+  // studentId -> where/when they got off (to-home runs) or arrived (to-school)
+  droppedAt?: Record<string, DropOff>;
+  // Stops we've already sent an "arriving soon" alert for.
+  approachNotified?: string[];
 }
 
-export interface ChatConversation {
+export type IncidentType = "delay" | "breakdown" | "accident" | "other" | "off_route" | "stopped";
+
+/** Something that happened on a ride: reported by the driver, or detected by the server. */
+export interface Incident {
   id: string;
-  kind: "parent_group" | "parent_driver" | "admin_broadcast" | "driver_admin";
-  routeId?: string;
-  participantIds: string[];
+  rideId: string;
+  routeId: string;
+  type: IncidentType;
+  source: "driver" | "system";
+  delayMinutes: number | null;
+  note: string | null; // staff only
+  createdAt: string;
+  resolvedAt: string | null;
 }
 
-export interface ChatMessage {
+export interface AppNotification {
   id: string;
-  conversationId: string;
-  senderId: string;
-  senderRole: Role;
+  kind: string;
+  title: string;
   body: string;
-  sentAt: string;
+  data: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface Absence {
+  studentId: string;
+  date: string; // YYYY-MM-DD in the school timezone
+  direction: "to_school" | "to_home" | "both";
 }

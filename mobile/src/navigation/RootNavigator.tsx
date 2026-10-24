@@ -13,6 +13,10 @@ import { SchoolStudentsScreen } from "../screens/admin/SchoolStudentsScreen";
 import { CompanyRoutesScreen } from "../screens/company/CompanyRoutesScreen";
 import { CompanyTeamScreen } from "../screens/company/CompanyTeamScreen";
 import { AccountTab } from "../components/AccountTab";
+import { useAlertsBadge } from "../context/AlertsContext";
+import { useT, type Key } from "../i18n";
+import { AlertsScreen } from "../screens/shared/AlertsScreen";
+import { ReportsScreen } from "../screens/reports/ReportsScreen";
 import { Logo } from "../components/Logo";
 import { colors } from "../theme";
 import type { Role } from "../types";
@@ -22,38 +26,40 @@ const Tab = createBottomTabNavigator();
 type Icon = keyof typeof Ionicons.glyphMap;
 interface TabDef {
   name: string;
+  label: Key;
   component: React.ComponentType;
   icon: Icon;
 }
 
+const ALERTS: TabDef = { name: "Alerts", label: "tab.alerts", component: AlertsScreen, icon: "notifications" };
+const ACCOUNT: TabDef = { name: "Account", label: "tab.account", component: AccountTab, icon: "person-circle" };
+const REPORTS: TabDef = { name: "Reports", label: "tab.reports", component: ReportsScreen, icon: "stats-chart" };
+
 // Each account type gets only its own screens - no shared "see everything" view.
 const TABS: Record<Role, TabDef[]> = {
-  student: [
-    { name: "Bus", component: StudentHomeScreen, icon: "bus" },
-    { name: "Account", component: AccountTab, icon: "person-circle" },
-  ],
-  parent: [
-    { name: "Bus", component: ParentHomeScreen, icon: "location" },
-    { name: "Account", component: AccountTab, icon: "person-circle" },
-  ],
-  driver: [
-    { name: "Drive", component: DriverHomeScreen, icon: "bus" },
-    { name: "Account", component: AccountTab, icon: "person-circle" },
-  ],
+  student: [{ name: "Bus", label: "tab.bus", component: StudentHomeScreen, icon: "bus" }, ALERTS, ACCOUNT],
+  parent: [{ name: "Bus", label: "tab.bus", component: ParentHomeScreen, icon: "location" }, ALERTS, ACCOUNT],
+  driver: [{ name: "Drive", label: "tab.drive", component: DriverHomeScreen, icon: "bus" }, ALERTS, ACCOUNT],
   admin: [
-    { name: "Buses", component: AdminDashboardScreen, icon: "radio" },
-    { name: "Students", component: SchoolStudentsScreen, icon: "people" },
-    { name: "Account", component: AccountTab, icon: "person-circle" },
+    { name: "Buses", label: "tab.buses", component: AdminDashboardScreen, icon: "radio" },
+    { name: "Students", label: "tab.students", component: SchoolStudentsScreen, icon: "people" },
+    REPORTS,
+    ALERTS,
+    ACCOUNT,
   ],
   company: [
-    { name: "Routes", component: CompanyRoutesScreen, icon: "git-network" },
-    { name: "Team", component: CompanyTeamScreen, icon: "business" },
-    { name: "Account", component: AccountTab, icon: "person-circle" },
+    { name: "Routes", label: "tab.routes", component: CompanyRoutesScreen, icon: "git-network" },
+    { name: "Team", label: "tab.team", component: CompanyTeamScreen, icon: "business" },
+    REPORTS,
+    ALERTS,
+    ACCOUNT,
   ],
 };
 
 export function RootNavigator() {
   const { user, loading } = useAuth();
+  const { t } = useT();
+  const { unread } = useAlertsBadge();
 
   if (loading) {
     return (
@@ -75,16 +81,25 @@ export function RootNavigator() {
           headerShown: false,
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: "#A89A8E",
-          tabBarLabelStyle: { fontWeight: "700", fontSize: 12 },
+          tabBarLabelStyle: { fontWeight: "700", fontSize: 11 },
           tabBarStyle: { borderTopColor: colors.line, backgroundColor: colors.white, height: 64, paddingBottom: 8, paddingTop: 6 },
           tabBarIcon: ({ color, size }) => {
-            const def = tabs.find((t) => t.name === route.name);
+            const def = tabs.find((d) => d.name === route.name);
             return <Ionicons name={def?.icon ?? "ellipse"} size={size} color={color} />;
           },
         })}
       >
-        {tabs.map((t) => (
-          <Tab.Screen key={t.name} name={t.name} component={t.component} />
+        {tabs.map((def) => (
+          <Tab.Screen
+            key={def.name}
+            name={def.name}
+            component={def.component}
+            options={{
+              title: t(def.label),
+              tabBarAccessibilityLabel: t(def.label),
+              tabBarBadge: def.name === "Alerts" && unread > 0 ? unread : undefined,
+            }}
+          />
         ))}
       </Tab.Navigator>
     </NavigationContainer>

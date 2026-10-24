@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { routes, users } from "./store.js";
+import { findUserByEmail, routes, users } from "./store.js";
 import { hashPassword } from "../security/auth.js";
 import { distanceMeters } from "../services/geofence.js";
+import { DEFAULT_PREFS } from "../types.js";
 import type { GeoPoint, Role, Route, User } from "../types.js";
 
 export const DEMO_PASSWORD = "Wheelie!Demo1";
@@ -16,6 +17,11 @@ export const DEMO_PASSWORD = "Wheelie!Demo1";
  * build in the app go through Mapbox instead.
  */
 export async function seedDemo() {
+  // The database now survives restarts, so only seed once.
+  if (findUserByEmail("company@wheelie.demo")) {
+    console.log(`\nWheelie demo accounts already exist (password for all: ${DEMO_PASSWORD}).\n`);
+    return;
+  }
   const passwordHash = await hashPassword(DEMO_PASSWORD);
   const make = (role: Role, name: string, email: string, extra: Partial<User> = {}): User => {
     const u: User = {
@@ -26,6 +32,12 @@ export async function seedDemo() {
       passwordHash,
       failedLogins: 0,
       lockedUntil: 0,
+      createdAt: new Date().toISOString(),
+      tokenVersion: 0,
+      emailVerified: true,
+      claimed: true,
+      lang: "en",
+      notifPrefs: { ...DEFAULT_PREFS },
       ...extra,
     };
     users.set(u.id, u);

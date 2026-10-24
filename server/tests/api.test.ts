@@ -113,7 +113,7 @@ describe("passwords and sign-in", () => {
 describe("change password", () => {
   it("needs the current password, then the new one works", async () => {
     const signup = await api("/auth/signup", {
-      body: { role: "student", name: "Pw Kid", email: "pw@x.test", password: "startpass123", schoolCode: "SCH-DEMO" },
+      body: { role: "student", name: "Pw Kid", email: "pw@x.test", password: "startpass123", acceptTerms: true, schoolCode: "SCH-DEMO" },
     });
     const token = signup.json.token;
     const bad = await api("/auth/change-password", {
@@ -139,11 +139,11 @@ describe("change password", () => {
 describe("sign up", () => {
   it("rejects weak passwords and bad codes", async () => {
     const weak = await api("/auth/signup", {
-      body: { role: "student", name: "A", email: "a1@x.test", password: "short", schoolCode: "SCH-DEMO" },
+      body: { role: "student", name: "A", email: "a1@x.test", password: "short", acceptTerms: true, schoolCode: "SCH-DEMO" },
     });
     expect(weak.status).toBe(400);
     const badCode = await api("/auth/signup", {
-      body: { role: "student", name: "A", email: "a2@x.test", password: "goodpass123", schoolCode: "SCH-NOPE" },
+      body: { role: "student", name: "A", email: "a2@x.test", password: "goodpass123", acceptTerms: true, schoolCode: "SCH-NOPE" },
     });
     expect(badCode.status).toBe(400);
   });
@@ -157,24 +157,24 @@ describe("sign up", () => {
 
   it("creates student, parent and driver accounts that join the right org", async () => {
     const student = await api("/auth/signup", {
-      body: { role: "student", name: "New Kid", email: "kid@x.test", password: "goodpass123", schoolCode: "sch-demo" },
+      body: { role: "student", name: "New Kid", email: "kid@x.test", password: "goodpass123", acceptTerms: true, schoolCode: "sch-demo" },
     });
     expect(student.status).toBe(201);
     expect(student.json.user.linkCode).toMatch(/^KID-/);
 
     const parent = await api("/auth/signup", {
-      body: { role: "parent", name: "New Parent", email: "par@x.test", password: "goodpass123", childCode: student.json.user.linkCode },
+      body: { role: "parent", name: "New Parent", email: "par@x.test", password: "goodpass123", acceptTerms: true, childCode: student.json.user.linkCode },
     });
     expect(parent.status).toBe(201);
     expect(parent.json.user.linkedStudentIds).toEqual([student.json.user.id]);
 
     const driver = await api("/auth/signup", {
-      body: { role: "driver", name: "New Driver", email: "drv@x.test", password: "goodpass123", companyCode: "DRV-DEMO" },
+      body: { role: "driver", name: "New Driver", email: "drv@x.test", password: "goodpass123", acceptTerms: true, companyCode: "DRV-DEMO" },
     });
     expect(driver.status).toBe(201);
 
     const dup = await api("/auth/signup", {
-      body: { role: "driver", name: "Dup", email: "DRV@x.test", password: "goodpass123", companyCode: "DRV-DEMO" },
+      body: { role: "driver", name: "Dup", email: "DRV@x.test", password: "goodpass123", acceptTerms: true, companyCode: "DRV-DEMO" },
     });
     expect(dup.status).toBe(409);
   });
@@ -266,7 +266,12 @@ describe("ride, tap-in and live tracking", () => {
     expect(sv.riderCount).toBe(3);
 
     // Ending the ride stops location sharing.
-    const end = await api(`/rides/${rideId}/end`, { token: driver.token, body: {} });
+    // Safety net: a student is aboard and the bus isn't at the school, so ending needs confirmation.
+    const blocked = await api(`/rides/${rideId}/end`, { token: driver.token, body: {} });
+    expect(blocked.status).toBe(409);
+    expect(blocked.json.code).toBe("far_from_school");
+    expect(blocked.json.students).toEqual(["Sam Student"]);
+    const end = await api(`/rides/${rideId}/end`, { token: driver.token, body: { force: true } });
     expect(end.status).toBe(200);
     expect(end.json.session.busLocation).toBeNull();
     expect((await api("/rides/active", { token: parent.token })).json).toEqual([]);
