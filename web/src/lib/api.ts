@@ -15,7 +15,11 @@ import type {
   User,
 } from "./types";
 
-export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000";
+// Blank or missing VITE_API_URL falls back to the local server. A blank value would otherwise
+// send requests to the website itself, which answers sign-in with a 405.
+export const API_URL: string = ((import.meta.env.VITE_API_URL as string | undefined) || "http://localhost:4000").trim().replace(/\/+$/, "");
+// ngrok's free plan shows a warning page to browsers unless this header is sent.
+const TUNNEL = { "ngrok-skip-browser-warning": "true" };
 
 export interface Session {
   token: string;
@@ -77,7 +81,7 @@ export function refreshSession(): Promise<boolean> {
     try {
       const res = await fetch(`${API_URL}/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...TUNNEL },
         body: JSON.stringify({ refreshToken: used }),
       });
       if (res.status === 400 || res.status === 401) return false;
@@ -107,6 +111,7 @@ async function send(path: string, o: Options): Promise<Response> {
       method: o.method ?? (o.body !== undefined ? "POST" : "GET"),
       headers: {
         "Content-Type": "application/json",
+        ...TUNNEL,
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       body: o.body !== undefined ? JSON.stringify(o.body) : undefined,

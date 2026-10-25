@@ -24,7 +24,7 @@ import type {
 // you don't have to edit this when your computer's IP changes. Override with
 // EXPO_PUBLIC_API_URL (set it to your https:// address in production), or edit
 // MANUAL_API_URL if you use `--tunnel`.
-const MANUAL_API_URL = "http://10.0.0.79:4000";
+const MANUAL_API_URL = "https://unruffled-wildcat-ardently.ngrok-free.dev";
 
 function resolveBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
@@ -90,7 +90,7 @@ export function refreshSession(): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
         body: JSON.stringify({ refreshToken: used }),
       });
       if (res.status === 401 || res.status === 400) return false; // refresh token is dead
@@ -124,6 +124,7 @@ async function send(path: string, options: Options): Promise<Response> {
       method: options.method ?? (options.body !== undefined ? "POST" : "GET"),
       headers: {
         "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
