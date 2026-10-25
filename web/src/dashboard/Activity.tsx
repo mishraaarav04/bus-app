@@ -22,7 +22,7 @@ export function Activity() {
 
   return (
     <>
-      <PageHead title="Activity log" sub="Who did what, and when. Check-ins, assignments, imports and exports are recorded." />
+      <PageHead title="Activity log" />
       <div className="card">
         {first.loading ? <Spinner /> : first.error ? <ErrorText>{first.error}</ErrorText> : rows.length === 0 ? <Empty title="No activity yet" /> : (
           <>

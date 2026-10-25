@@ -74,7 +74,7 @@ export function Students() {
 
   return (
     <>
-      <PageHead title="Students" sub="Assign each student to a stop. Families link with the student’s code.">
+      <PageHead title="Students">
         <button className="btn btn-primary" onClick={() => setOpen(true)}>Import roster</button>
       </PageHead>
       <div className="grid2" style={{ marginBottom: 16 }}>

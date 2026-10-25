@@ -74,7 +74,7 @@ export function Team() {
 
   return (
     <>
-      <PageHead title="Drivers & schools" sub="Share the driver code with your drivers. Add the schools you serve.">
+      <PageHead title="Drivers & schools">
         <button className="btn btn-primary" onClick={() => setOpen(true)}>Add school</button>
       </PageHead>
       <div className="grid2">

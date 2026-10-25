@@ -119,7 +119,7 @@ export function RoutesPage() {
 
   return (
     <>
-      <PageHead title="Routes" sub={company ? "Build routes, assign drivers, and send them out." : "The routes that serve your school."}>
+      <PageHead title="Routes">
         {company && (
           <button className="btn btn-primary" disabled={!overview.data?.schools.length} onClick={() => setOpen(true)}>New route</button>
         )}

@@ -23,7 +23,7 @@ export function Reports() {
 
   return (
     <>
-      <PageHead title="Reports" sub="How the buses are doing over any date range.">
+      <PageHead title="Reports">
         <button className="btn btn-outline" onClick={() => void csv("rides")}>Rides CSV</button>
         <button className="btn btn-outline" onClick={() => void csv("boardings")}>Boardings CSV</button>
       </PageHead>

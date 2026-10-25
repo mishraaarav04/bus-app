@@ -86,7 +86,7 @@ export function Alerts() {
 
   return (
     <>
-      <PageHead title="Alerts" sub="Delays, problems and updates for your routes, and a way to message families.">
+      <PageHead title="Alerts">
         <button className="btn btn-outline" disabled={!data?.unread} onClick={async () => { await api.markNotificationsRead(); await reload(); }}>Mark all read</button>
       </PageHead>
       <Composer onSent={() => void reload()} />

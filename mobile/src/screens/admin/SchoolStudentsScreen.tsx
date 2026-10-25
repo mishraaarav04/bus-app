@@ -91,7 +91,6 @@ export function SchoolStudentsScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.white }}>
           <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
             <Text style={font.title}>{editing?.name}</Text>
-            <Text style={font.small}>Pick the stop where this student gets on.</Text>
             <ErrorText text={error} />
             {routes.length === 0 ? <Empty title="No routes yet" hint="Your bus company hasn't sent any routes." /> : null}
             {routes.map((r) => {

@@ -177,7 +177,6 @@ function Signup({ onSwitch }: { onSwitch: () => void }) {
         <View style={{ alignItems: "center", marginTop: 12, marginBottom: 8 }}>
           <Logo size={48} showName={false} />
           <Text style={[font.title, { marginTop: 12 }]}>{t("login.join")}</Text>
-          <Text style={font.small}>{t("login.signingAs")}</Text>
         </View>
         {(Object.keys(ROLE_INFO) as SignupRole[]).map((r) => (
           <Pressable key={r} style={styles.roleCard} onPress={() => setRole(r)} accessibilityRole="button" accessibilityLabel={t(ROLE_INFO[r].title)}>

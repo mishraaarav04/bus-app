@@ -39,7 +39,7 @@ export function Ask() {
 
   return (
     <>
-      <PageHead title="Ask RouteIQ" sub="Ask a question about your routes in plain words. Answers come from your own ride records." />
+      <PageHead title="Ask RouteIQ" />
       <form className="card stack" onSubmit={submit}>
         <textarea className="input" style={{ minHeight: 88 }} maxLength={500} value={q} onChange={(e) => setQ(e.target.value)} placeholder="For example: which route had the most missed students last week?" aria-label="Your question"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void ask(q); } }} />

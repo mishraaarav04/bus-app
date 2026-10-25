@@ -414,7 +414,6 @@ export function DriverHomeScreen({ debugOpen }: { debugOpen?: "scanner" | "probl
         ) : (
           <>
             <Text style={font.h2}>{t("driver.yourRoutes")}</Text>
-            <Text style={font.small}>{t("driver.startHint")}</Text>
             {queued > 0 ? <Pill text={t("driver.queued", { n: queued })} tone="amber" /> : null}
             <ErrorText text={error} />
             {routes.length === 0 ? (

@@ -31,7 +31,7 @@ export function Insights() {
 
   return (
     <>
-      <PageHead title="Insights" sub="What the ride history says about your routes. Everything here is learned from your own rides." />
+      <PageHead title="Insights" />
       <div className="stats">
         <div className="stat live">
           <b>{acc.learnedErrorSec == null ? "-" : min(acc.learnedErrorSec)}</b>

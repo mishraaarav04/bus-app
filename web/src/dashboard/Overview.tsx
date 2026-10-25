@@ -32,7 +32,7 @@ export function Overview() {
 
   return (
     <>
-      <PageHead title="Live overview" sub="Every ride that is running right now. This page updates itself." />
+      <PageHead title="Live overview" />
       <div className="stats">
         <div className="stat live"><b>{stats.live}</b><span>Buses running</span></div>
         <div className="stat"><b>{stats.boarded}<small style={{ fontSize: 18, color: "var(--muted)" }}> / {stats.riders}</small></b><span>Students on board</span></div>
