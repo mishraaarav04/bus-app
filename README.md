@@ -100,6 +100,10 @@ Everything is stored in one SQLite file (`DB_PATH`, default `server/data/wheelie
 
 **Website (`web/`)**: a public homepage, then a staff-only dashboard: live map of running buses, routes (build, assign driver, schedule, send), drivers and schools, students and roster import, reports with CSV download, alerts, activity log. See `web/README.md`.
 
+### Point the demo at your own streets
+
+`server/scripts/use-my-streets.ts` adds a morning route between addresses you choose, with a path that follows real roads (Mapbox Directions), and moves Sam and Ava onto it. Everyone else stays on their routes. Edit `STOPS` and `SCHOOL` at the top, stop the server, then run `npx tsx scripts/use-my-streets.ts` from `server/` to preview, and add `--apply` to make the change.
+
 ### Smarter features
 
 - **Arrival times that learn.** Every ride records how long the bus took between stops. After 3 rides on a route, estimates use those times (stops and traffic included) for rides starting at a similar time of day. Before that, they use distance and an average speed. The Insights page shows how much closer the learned estimates are.

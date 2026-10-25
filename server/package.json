@@ -10,7 +10,9 @@
     "build": "tsc -p tsconfig.build.json",
     "start:prod": "node dist/index.js",
     "backup": "node scripts/backup.mjs",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "use-my-streets": "tsx scripts/use-my-streets.ts",
+    "tunnel": "node scripts/tunnel.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
