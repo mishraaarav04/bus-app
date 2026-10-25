@@ -174,7 +174,7 @@ describe("Ask RouteIQ", () => {
   const realFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = realFetch;
-    config.anthropicApiKey = "";
+    config.aiApiKey = "";
   });
 
   it("validates the question and keeps it to staff", async () => {
@@ -198,40 +198,40 @@ describe("Ask RouteIQ", () => {
   });
 
   it("lets Claude call scoped tools and returns its answer", async () => {
-    config.anthropicApiKey = "test-key";
+    config.aiApiKey = "test-key";
     const company = await login("company@wheelie.demo");
     const seen: any[] = [];
     globalThis.fetch = (async (url: any, init: any) => {
-      if (!String(url).startsWith("https://api.anthropic.com")) return realFetch(url, init);
+      if (!String(url).startsWith("https://integrate.api.nvidia.com")) return realFetch(url, init);
       const body = JSON.parse(init.body);
       seen.push(body);
-      expect(init.headers["x-api-key"]).toBe("test-key");
+      expect(init.headers.authorization).toBe("Bearer test-key");
       if (seen.length === 1) {
-        return new Response(JSON.stringify({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "t1", name: "route_performance", input: { from: "2020-01-01" } }] }));
+        return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "t1", type: "function", function: { name: "route_performance", arguments: JSON.stringify({ from: "2020-01-01" }) } }] } }] }));
       }
-      return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "Ironbound ran on time." }] }));
+      return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Ironbound ran on time." } }] }));
     }) as any;
     const r = await api("/ai/ask", { token: company.token, body: { question: "How was Ironbound?" } });
     expect(r.json).toEqual({ answer: "Ironbound ran on time.", mode: "ai" });
     expect(seen).toHaveLength(2);
-    expect(seen[0].tools.map((t: any) => t.name)).toContain("unusual_activity");
-    const toolResult = JSON.stringify(seen[1].messages[2]);
-    expect(toolResult).toContain("tool_result");
+    expect(seen[0].tools.map((t: any) => t.function.name)).toContain("unusual_activity");
+    const toolResult = JSON.stringify(seen[1].messages[3]);
+    expect(seen[1].messages[3].role).toBe("tool");
     expect(toolResult).not.toContain("Sam Student");
-    expect(seen[0].system).toContain("Brick City Bus Co.");
+    expect(seen[0].messages[0].content).toContain("Brick City Bus Co.");
   });
 
   it("never gives student names to the model, even through the anomaly tool", async () => {
-    config.anthropicApiKey = "test-key";
+    config.aiApiKey = "test-key";
     const school = await login("school@wheelie.demo");
     let toolText = "";
     let n = 0;
     globalThis.fetch = (async (url: any, init: any) => {
-      if (!String(url).startsWith("https://api.anthropic.com")) return realFetch(url, init);
+      if (!String(url).startsWith("https://integrate.api.nvidia.com")) return realFetch(url, init);
       const body = JSON.parse(init.body);
-      if (++n === 1) return new Response(JSON.stringify({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "t", name: "unusual_activity", input: {} }] }));
-      toolText = JSON.stringify(body.messages[2]);
-      return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "ok" }] }));
+      if (++n === 1) return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "t", type: "function", function: { name: "unusual_activity", arguments: "{}" } }] } }] }));
+      toolText = JSON.stringify(body.messages[3]);
+      return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }));
     }) as any;
     await api("/ai/ask", { token: school.token, body: { question: "anything unusual?" } });
     expect(toolText).toContain("A student on");
@@ -239,10 +239,10 @@ describe("Ask RouteIQ", () => {
   });
 
   it("falls back to the built-in answer if the AI service fails", async () => {
-    config.anthropicApiKey = "test-key";
+    config.aiApiKey = "test-key";
     const company = await login("company@wheelie.demo");
     globalThis.fetch = (async (url: any, init: any) =>
-      String(url).startsWith("https://api.anthropic.com") ? new Response("{}", { status: 500 }) : realFetch(url, init)) as any;
+      String(url).startsWith("https://integrate.api.nvidia.com") ? new Response("{}", { status: 500 }) : realFetch(url, init)) as any;
     const r = await api("/ai/ask", { token: company.token, body: { question: "how were the routes?" } });
     expect(r.status).toBe(200);
     expect(r.json.mode).toBe("basic");
@@ -254,7 +254,7 @@ describe("alert drafting and announcements", () => {
   const realFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = realFetch;
-    config.anthropicApiKey = "";
+    config.aiApiKey = "";
   });
 
   it("returns the note as-is without a key, and three languages with one", async () => {
@@ -264,11 +264,11 @@ describe("alert drafting and announcements", () => {
     expect(plain.json.draft.en.body).toContain("flat tire");
     expect(plain.json.draft.es).toBeUndefined();
 
-    config.anthropicApiKey = "k";
+    config.aiApiKey = "k";
     globalThis.fetch = (async (url: any, init: any) => {
-      if (!String(url).startsWith("https://api.anthropic.com")) return realFetch(url, init);
+      if (!String(url).startsWith("https://integrate.api.nvidia.com")) return realFetch(url, init);
       const t = (title: string, body: string) => ({ title, body });
-      return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "```json\n" + JSON.stringify({ en: t("Bus 12 delayed", "Bus 12 is about 15 minutes late."), es: t("Autobús 12 retrasado", "El autobús 12 lleva unos 15 minutos de retraso."), pt: t("Ônibus 12 atrasado", "O ônibus 12 está cerca de 15 minutos atrasado.") }) + "\n```" }] }));
+      return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "```json\n" + JSON.stringify({ en: t("Bus 12 delayed", "Bus 12 is about 15 minutes late."), es: t("Autobús 12 retrasado", "El autobús 12 lleva unos 15 minutos de retraso."), pt: t("Ônibus 12 atrasado", "O ônibus 12 está cerca de 15 minutos atrasado.") }) + "\n```" } }] }));
     }) as any;
     const ai = await api("/ai/draft-alert", { token: school.token, body: { note: "Bus 12 is 15 minutes late due to a flat tire" } });
     expect(ai.json.mode).toBe("ai");

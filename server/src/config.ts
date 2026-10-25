@@ -74,10 +74,12 @@ export const config = {
   delayForecastMinutes: num(process.env.DELAY_FORECAST_MINUTES, 6),
   busSeats: num(process.env.BUS_SEATS, 44),
 
-  // "Ask RouteIQ" and alert drafting use Claude when a key is set. Without a key
-  // both still work in a simpler built-in mode. Only totals, route names and driver names are sent. Never student names.
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  aiModel: process.env.AI_MODEL ?? "claude-sonnet-5-5",
+  // "Ask RouteIQ" and alert drafting use an AI model when a key is set (NVIDIA NIM by default;
+  // any OpenAI-compatible service works). Without a key both still work in a simpler built-in mode.
+  // Only totals, route names and driver names are sent. Never student names.
+  aiApiKey: process.env.NVIDIA_API_KEY || process.env.AI_API_KEY || "",
+  aiBaseUrl: (process.env.AI_BASE_URL || "https://integrate.api.nvidia.com/v1").replace(/\/$/, ""),
+  aiModel: process.env.AI_MODEL || "meta/llama-3.3-70b-instruct",
 };
 
 if (!config.mapboxToken) {

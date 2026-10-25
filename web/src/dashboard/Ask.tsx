@@ -64,7 +64,7 @@ export function Ask() {
           </div>
         ))}
         {turns.length === 0 && (
-          <p className="hint">The built-in mode understands common questions about lateness, incidents, drivers, forecasts and route ideas. Add an Anthropic key on the server (<code>ANTHROPIC_API_KEY</code>) to ask anything in your own words. Student names are never sent to the AI service.</p>
+          <p className="hint">The built-in mode understands common questions about lateness, incidents, drivers, forecasts and route ideas. Add an NVIDIA API key on the server (<code>NVIDIA_API_KEY</code>) to ask anything in your own words. Student names are never sent to the AI service.</p>
         )}
       </div>
     </>
