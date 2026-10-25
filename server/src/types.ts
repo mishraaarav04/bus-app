@@ -160,6 +160,13 @@ export interface RideSession {
   droppedAt?: Record<string, DropOff>;
   // Stops we've already sent an "arriving soon" alert for.
   approachNotified?: string[];
+  // stopId -> when the bus first reached it (ms). Feeds the learned ETAs.
+  arrivedAt?: Record<string, number>;
+  // stopId -> the prediction made when it was ~10 min away, to score it on arrival.
+  etaProbe?: Record<string, { at: number; pred: number; base: number }>;
+  // How many minutes behind its usual time the ride is predicted to finish, and what families were told.
+  delayForecastMin?: number;
+  delayAlertedMin?: number;
 }
 
 export type IncidentType = "delay" | "breakdown" | "accident" | "other" | "off_route" | "stopped";

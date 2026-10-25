@@ -49,7 +49,7 @@ export function SchoolStudentsScreen() {
         <Card>
           <Text style={font.h3}>Student sign-up code</Text>
           <Text style={{ fontSize: 26, fontWeight: "900", letterSpacing: 2, color: colors.primaryDark }}>{code}</Text>
-          <Button title="Share code" variant="soft" onPress={() => Share.share({ message: `Join Wheelie with school code ${code}` })} />
+          <Button title="Share code" variant="soft" onPress={() => Share.share({ message: `Join RouteIQ with school code ${code}` })} />
         </Card>
         <Button title="Import a student list (CSV)" variant="outline" onPress={() => setImporting(true)} />
         <ErrorText text={error} />

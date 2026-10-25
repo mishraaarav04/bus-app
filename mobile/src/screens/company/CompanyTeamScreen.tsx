@@ -127,7 +127,7 @@ export function CompanyTeamScreen() {
               <Button
                 title="Share code"
                 variant="soft"
-                onPress={() => Share.share({ message: `Join our bus company on Wheelie with code ${overview.driverCode}` })}
+                onPress={() => Share.share({ message: `Join our bus company on RouteIQ with code ${overview.driverCode}` })}
               />
             </Card>
 

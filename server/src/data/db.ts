@@ -166,6 +166,37 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (ride_id, scan_id)
   );
   `,
+  // 2: what the buses actually do (learned ETAs) and how good the predictions were
+  `
+  CREATE TABLE stop_times (
+    ride_id TEXT NOT NULL,
+    route_id TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    from_stop_id TEXT NOT NULL,
+    to_stop_id TEXT NOT NULL,
+    start_min INTEGER NOT NULL,
+    local_date TEXT NOT NULL,
+    leg_sec INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (ride_id, to_stop_id)
+  );
+  CREATE INDEX idx_stoptimes_leg ON stop_times(route_id, from_stop_id, to_stop_id, created_at DESC);
+
+  CREATE TABLE eta_probes (
+    ride_id TEXT NOT NULL,
+    stop_id TEXT NOT NULL,
+    route_id TEXT NOT NULL,
+    company_id TEXT,
+    school_id TEXT,
+    predicted_sec INTEGER NOT NULL,
+    baseline_sec INTEGER NOT NULL,
+    actual_sec INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (ride_id, stop_id)
+  );
+  CREATE INDEX idx_probes_company ON eta_probes(company_id, created_at DESC);
+  CREATE INDEX idx_probes_school ON eta_probes(school_id, created_at DESC);
+  `,
 ];
 
 function open(): Database.Database {

@@ -165,6 +165,38 @@ export function DriverHomeScreen({ debugOpen }: { debugOpen?: "scanner" | "probl
     }
   }
 
+  // For a student with no phone: the driver ticks them off by hand.
+  function manualCheckIn(studentId: string, name: string) {
+    if (!rideId) return;
+    Alert.alert(t("driver.checkInQ", { name }), t("driver.checkInWhy"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("driver.checkIn"),
+        onPress: async () => {
+          try {
+            const r = await api.checkin(rideId, { studentId });
+            const w = r.warning;
+            if (w) {
+              Alert.alert(
+                t("common.error"),
+                w.code === "was_not_riding"
+                  ? t("scan.wasNotRiding", { name: r.name })
+                  : w.code === "was_missed"
+                  ? t("scan.wasMissed", { name: r.name })
+                  : w.code === "wrong_stop"
+                  ? t("scan.wrongStop", { name: r.name })
+                  : w.message
+              );
+            }
+            await refresh();
+          } catch (e: any) {
+            Alert.alert(t("common.error"), e.message);
+          }
+        },
+      },
+    ]);
+  }
+
   async function dropOff(studentId: string, name: string, handedTo?: string) {
     if (!rideId) return;
     try {
@@ -342,6 +374,7 @@ export function DriverHomeScreen({ debugOpen }: { debugOpen?: "scanner" | "probl
                     {kids.map((k) => {
                       const p = k.dropped ? { text: t("status.dropped"), tone: "green" as const } : statusPill(k.status, t);
                       const canDrop = ride.session.direction === "to_home" && k.status === "boarded" && !k.dropped;
+                      const canCheckIn = (k.status === "pending" || k.status === "missed" || k.status === "skipped") && !k.dropped;
                       return (
                         <Row key={k.id} style={{ justifyContent: "space-between" }}>
                           <View style={{ flex: 1 }}>
@@ -350,7 +383,17 @@ export function DriverHomeScreen({ debugOpen }: { debugOpen?: "scanner" | "probl
                               <Text style={font.small}>{t("driver.adultOnly")}</Text>
                             ) : null}
                           </View>
-                          {canDrop ? (
+                          {canCheckIn ? (
+                            <Row style={{ gap: 8 }}>
+                              <Pill text={p.text} tone={p.tone} />
+                              <Button
+                                title={t("driver.checkIn")}
+                                variant="soft"
+                                style={{ minHeight: 40, paddingHorizontal: 14 }}
+                                onPress={() => manualCheckIn(k.id, k.name)}
+                              />
+                            </Row>
+                          ) : canDrop ? (
                             <Button
                               title={t("driver.dropOff")}
                               variant="soft"

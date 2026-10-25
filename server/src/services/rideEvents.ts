@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { rideSessions, users } from "../data/store.js";
 import type { BoardingStatus, Incident, RideSession, Route } from "../types.js";
 import { archiveRide } from "./history.js";
+import { recordFinish } from "./learning.js";
 import { notifyUsers } from "./notify.js";
 import { familyOf, parentsOf, rideStaff } from "./rideBroadcast.js";
 
@@ -12,7 +13,7 @@ const firstName = (id: string) => (users.get(id)?.name ?? "Student").split(" ")[
 const stopOf = (route: Route, studentId: string) => route.stops.find((s) => s.studentIds.includes(studentId));
 
 /** Students on the run whose status is one of `statuses`. */
-function ridersWith(ride: RideSession, route: Route, statuses: BoardingStatus[]): string[] {
+export function ridersWith(ride: RideSession, route: Route, statuses: BoardingStatus[]): string[] {
   const out: string[] = [];
   for (const stop of route.stops) {
     for (const sid of stop.studentIds) {
@@ -58,6 +59,49 @@ export function checkApproaching(ride: RideSession, route: Route) {
     }
   }
   if (changed) ride.approachNotified = [...notified];
+}
+
+const WHEN: Record<string, Record<string, string>> = {
+  en: { to_school: "to school", to_home: "home", both: "both ways" },
+  es: { to_school: "a la escuela", to_home: "a casa", both: "ida y vuelta" },
+  pt: { to_school: "para a escola", to_home: "para casa", both: "ida e volta" },
+};
+
+/**
+ * A student (or another parent) marked a child "not riding" on a live run.
+ * The other adults in the family hear about it right away.
+ */
+export function onNotRiding(ride: RideSession, route: Route, studentId: string, actorId: string) {
+  const actor = users.get(actorId);
+  const who = actorId === studentId ? firstName(studentId) : (actor?.name ?? "A parent").split(" ")[0];
+  notifyUsers(
+    parentsOf(studentId).filter((id) => id !== actorId),
+    {
+      kind: "not_riding",
+      params: { name: firstName(studentId), who, route: route.name },
+      data: { rideId: ride.id, studentId },
+    }
+  );
+}
+
+/** A day off the bus was planned ahead of time. */
+export function onAbsencePlanned(studentId: string, actorId: string, date: string, direction: string) {
+  const actor = users.get(actorId);
+  const who = actorId === studentId ? firstName(studentId) : (actor?.name ?? "A parent").split(" ")[0];
+  const targets = parentsOf(studentId).filter((id) => id !== actorId);
+  for (const id of new Set(targets)) {
+    const lang = users.get(id)?.lang ?? "en";
+    notifyUsers([id], {
+      kind: "absence_planned",
+      params: {
+        name: firstName(studentId),
+        who,
+        date: new Date(`${date}T12:00:00`).toLocaleDateString(lang, { weekday: "short", month: "short", day: "numeric" }),
+        when: (WHEN[lang] ?? WHEN.en)[direction] ?? direction,
+      },
+      data: { studentId, date, direction },
+    });
+  }
 }
 
 export function onBoarded(ride: RideSession, route: Route, studentId: string) {
@@ -136,7 +180,19 @@ export function onRideEnded(ride: RideSession, route: Route, missed: string[]) {
     }
   }
 
+  recordFinish(ride, route);
   archiveRide(ride, route);
+}
+
+/** The ride is on track to finish later than usual. Families and staff get an early heads-up. */
+export function onDelayForecast(ride: RideSession, route: Route, minutes: number) {
+  const riding = ridersWith(ride, route, ["pending", "boarded"]);
+  const staff = rideStaff(ride, route).filter((id) => id !== ride.driverId);
+  notifyUsers([...familiesOfAll(riding), ...staff], {
+    kind: "delay_forecast",
+    params: { route: route.name, min: minutes },
+    data: { rideId: ride.id },
+  });
 }
 
 // Finished rides stay in memory briefly so a family's screen can show "arrived",

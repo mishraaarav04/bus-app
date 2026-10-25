@@ -18,6 +18,8 @@ export function purgeOld(now = Date.now()) {
     // The audit log is kept twice as long as ride data.
     audit: run("DELETE FROM audit_log WHERE ts < ?", now - config.retentionDays * 2 * DAY),
     notifications: run("DELETE FROM notifications WHERE created_at < ?", now - 90 * DAY),
+    stopTimes: run("DELETE FROM stop_times WHERE created_at < ?", keep),
+    etaProbes: run("DELETE FROM eta_probes WHERE created_at < ?", keep),
     scans: run("DELETE FROM scans WHERE created_at < ?", now - 7 * DAY),
     absences: run("DELETE FROM absences WHERE date < ?", addDays(todayLocal(), -7)),
     tokens: run(

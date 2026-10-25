@@ -3,6 +3,7 @@ import { users } from "../data/store.js";
 import type { GeoPoint, Incident, RideSession, Route, User } from "../types.js";
 import { incidentsForRide, openDriverIncident } from "./incidents.js";
 import { myRidersOnRoute, nameOf } from "./access.js";
+import { learnedLegs, legSeconds, startMinuteOf } from "./learning.js";
 import { distanceMeters } from "./geofence.js";
 
 const DEFAULT_SPEED = 8;
@@ -36,8 +37,9 @@ function progress(ride: RideSession, route: Route) {
     const speed = ride.avgSpeedMps ?? DEFAULT_SPEED;
     const lastStop = route.stops.find((s) => s.id === lastRemaining);
     if (lastStop && lastState?.etaSeconds != null) {
+      const learned = legSeconds(learnedLegs(route, startMinuteOf(ride)), lastStop.id, "end");
       etaToSchoolSec = Math.round(
-        lastState.etaSeconds + distanceMeters(lastStop.location, route.schoolLocation) / speed
+        lastState.etaSeconds + (learned ?? distanceMeters(lastStop.location, route.schoolLocation) / speed)
       );
     } else if (!lastStop) {
       etaToSchoolSec = Math.round(distanceMeters(ride.busLocation, route.schoolLocation) / speed);

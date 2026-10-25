@@ -11,7 +11,7 @@ const { httpServer } = buildServer();
 process.on("unhandledRejection", (e) => console.error("[wheelie] unhandled rejection:", e));
 
 httpServer.listen(config.port, async () => {
-  console.log(`Wheelie server listening on :${config.port} (database: ${config.dbPath})`);
+  console.log(`RouteIQ server listening on :${config.port} (database: ${config.dbPath})`);
   if (config.seedDemo) await seedDemo();
   startRetentionJob();
   sweepEndedRides();

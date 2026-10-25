@@ -1,4 +1,4 @@
-# Wheelie server. Build from the server/ folder:  docker build -t wheelie-server .
+# RouteIQ server. Build from the server/ folder:  docker build -t wheelie-server .
 FROM node:22-slim AS build
 WORKDIR /app
 # better-sqlite3 ships prebuilt binaries; these are only needed if one isn't available.

@@ -20,7 +20,7 @@ export function Logo({ size = 64, showName = true }: { size?: number; showName?:
       </View>
       {showName ? (
         <Text style={{ fontSize: size * 0.5, fontWeight: "900", color: colors.ink, letterSpacing: -1 }}>
-          wheelie
+          Route<Text style={{ color: colors.primary }}>IQ</Text>
         </Text>
       ) : null}
     </View>

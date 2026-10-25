@@ -19,7 +19,7 @@ export const DEMO_PASSWORD = "Wheelie!Demo1";
 export async function seedDemo() {
   // The database now survives restarts, so only seed once.
   if (findUserByEmail("company@wheelie.demo")) {
-    console.log(`\nWheelie demo accounts already exist (password for all: ${DEMO_PASSWORD}).\n`);
+    console.log(`\nRouteIQ demo accounts already exist (password for all: ${DEMO_PASSWORD}).\n`);
     return;
   }
   const passwordHash = await hashPassword(DEMO_PASSWORD);
@@ -154,7 +154,7 @@ export async function seedDemo() {
   console.log(
     [
       "",
-      "Wheelie demo accounts (password for all: " + DEMO_PASSWORD + ")",
+      "RouteIQ demo accounts (password for all: " + DEMO_PASSWORD + ")",
       "  company   company@wheelie.demo    driver code: DRV-DEMO",
       "  school    school@wheelie.demo     student code: SCH-DEMO",
       "  driver    driver@wheelie.demo     (Morning Run - Ironbound)",

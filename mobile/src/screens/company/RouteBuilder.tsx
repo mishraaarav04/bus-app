@@ -17,7 +17,7 @@ interface DraftStop {
 }
 
 /**
- * The whole point for bus companies: pick a school, add stops, and Wheelie
+ * The whole point for bus companies: pick a school, add stops, and RouteIQ
  * builds the fastest route that fits the bus. No ordering by hand.
  */
 export function RouteBuilder({
@@ -206,7 +206,7 @@ export function RouteBuilder({
             }
           />
         ) : null}
-        <Text style={font.small}>Add them in any order. Wheelie orders them for the fastest drive.</Text>
+        <Text style={font.small}>Add them in any order. RouteIQ orders them for the fastest drive.</Text>
 
         <ErrorText text={error} />
         <Button title="Build fastest route" onPress={build} loading={busy} disabled={!canBuild} />

@@ -20,13 +20,14 @@ export async function stopTestServer() {
 
 export async function api(
   path: string,
-  opts: { method?: string; token?: string; body?: unknown; raw?: boolean } = {}
+  opts: { method?: string; token?: string; body?: unknown; raw?: boolean; headers?: Record<string, string> } = {}
 ) {
   const res = await fetch(base + path, {
     method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
     headers: {
       "Content-Type": "application/json",
       ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
+      ...(opts.headers ?? {}),
     },
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });

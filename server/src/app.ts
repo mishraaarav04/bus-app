@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { config } from "./config.js";
 import { scheduleFlush } from "./data/store.js";
+import { aiRouter } from "./routes/ai.js";
 import { absencesRouter } from "./routes/absences.js";
 import { authRouter } from "./routes/auth.js";
 import { companyRouter } from "./routes/company.js";
@@ -35,7 +36,20 @@ if (config.requireHttps) {
 }
 
 app.use(helmet());
-// Native apps don't use browser CORS, so no cross-origin access is granted.
+// The phone app doesn't use browser CORS. Only the listed website origins (the
+// dashboard) may call the API from a browser; anything else gets no CORS headers.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && config.webOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Max-Age", "600");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+  }
+  next();
+});
 const smallJson = express.json({ limit: "50kb" });
 // The roster import has its own, larger body limit (see routes/school.ts).
 app.use((req, res, next) => (req.path.startsWith("/school/roster") ? next() : smallJson(req, res, next)));
@@ -53,6 +67,7 @@ app.use(authRouter);
 app.use(notificationsRouter);
 app.use(absencesRouter);
 app.use(reportsRouter);
+app.use(aiRouter);
 app.use(historyRouter);
 app.use(companyRouter);
 app.use(schoolRouter);
@@ -69,7 +84,10 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 const httpServer = createServer(app);
-const io = new Server(httpServer, { maxHttpBufferSize: 10_000 });
+const io = new Server(httpServer, {
+  maxHttpBufferSize: 10_000,
+  cors: config.webOrigins.length ? { origin: config.webOrigins } : undefined,
+});
 setIo(io);
 registerSockets(io);
 

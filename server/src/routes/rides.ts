@@ -27,10 +27,12 @@ import { audit } from "../services/audit.js";
 import { distanceMeters } from "../services/geofence.js";
 import { createIncident, getIncident, openDriverIncident, resolveIncident } from "../services/incidents.js";
 import { monitorLocation, forgetRide } from "../services/monitor.js";
+import { checkDelayForecast, forgetForecast } from "../services/delayForecast.js";
 import { broadcastRide } from "../services/rideBroadcast.js";
 import {
   checkApproaching,
   onBoarded,
+  onNotRiding,
   onDropoff,
   onIncident,
   onIncidentResolved,
@@ -61,6 +63,7 @@ export function applyDriverLocation(ride: RideSession, loc: { lat: number; lng: 
   evaluateGeofences(ride, route, {}); // students don't share location; boarding is by tap
   checkApproaching(ride, route);
   monitorLocation(ride, route);
+  checkDelayForecast(ride, route);
   broadcastRide(ride);
   return true;
 }
@@ -172,6 +175,7 @@ ridesRouter.post("/rides/:id/not-riding", requireRole("student", "parent"), (req
     return res.status(403).json({ error: "That isn't your student." });
   }
   const result = markStudentNotRiding(ride, route, parsed.data.studentId);
+  onNotRiding(ride, route, parsed.data.studentId, req.user!.id);
   broadcastRide(ride);
   res.json({ rerouted: result.rerouted });
 });
@@ -311,6 +315,7 @@ ridesRouter.post("/rides/:id/end", requireRole("driver"), (req, res) => {
 
   const missed = endRide(own.ride);
   forgetRide(own.ride.id);
+  forgetForecast(own.ride.id);
   onRideEnded(own.ride, own.route, missed);
   audit(req.user!, { action: "ride.end", targetType: "ride", targetId: own.ride.id, companyId: own.route.companyId, schoolId: own.route.schoolId, meta: { route: own.route.name, forced: Boolean(parsed.data.force) } }, req);
   broadcastRide(own.ride);
@@ -343,7 +348,7 @@ ridesRouter.post("/rides/:id/checkin", requireRole("driver"), (req, res) => {
 
   const parsed = checkinSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Nothing to check in." });
-  const { token, tagId, scanId } = parsed.data;
+  const { token, tagId, scanId, studentId: manualId } = parsed.data;
 
   // A retried or offline-queued scan is only ever counted once.
   if (scanId) {
@@ -377,6 +382,11 @@ ridesRouter.post("/rides/:id/checkin", requireRole("driver"), (req, res) => {
     }
   } else if (tagId) {
     studentId = findStudentByTag(tagId)?.id ?? null;
+  } else if (manualId) {
+    // The driver ticks the student off by hand (no phone or card). Only students
+    // who are on this driver's route can be checked in this way.
+    const onThisRoute = own.route.stops.some((s) => s.studentIds.includes(manualId));
+    studentId = onThisRoute ? manualId : null;
   }
   const student = studentId ? users.get(studentId) : undefined;
   if (!student || student.role !== "student") {
@@ -418,6 +428,9 @@ ridesRouter.post("/rides/:id/checkin", requireRole("driver"), (req, res) => {
       warning = { code: "wrong_stop", message: `${student.name} usually gets on at ${stop.name}.` };
     }
     onBoarded(own.ride, own.route, student.id);
+    if (manualId) {
+      audit(req.user!, { action: "checkin.manual", targetType: "student", targetId: student.id, companyId: own.route.companyId, schoolId: own.route.schoolId, meta: { route: own.route.name, student: student.name } }, req);
+    }
     broadcastRide(own.ride);
   }
   return reply(200, { name: student.name, alreadyBoarded: result.alreadyBoarded, warning });

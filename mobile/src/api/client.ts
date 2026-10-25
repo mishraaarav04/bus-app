@@ -129,7 +129,7 @@ async function send(path: string, options: Options): Promise<Response> {
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
   } catch {
-    throw new ApiError("Can't reach the Wheelie server. Check your connection and try again.", 0);
+    throw new ApiError("Can't reach the RouteIQ server. Check your connection and try again.", 0);
   }
 }
 
@@ -300,6 +300,6 @@ export const api = {
       body: { studentId, handedTo },
     }),
   boardingToken: () => request<{ token: string; expiresInSec: number }>("/students/me/boarding-token"),
-  checkin: (rideId: string, body: { token?: string; tagId?: string; scanId?: string; scannedAt?: string }) =>
+  checkin: (rideId: string, body: { token?: string; tagId?: string; studentId?: string; scanId?: string; scannedAt?: string }) =>
     request<CheckinResult>(`/rides/${rideId}/checkin`, { body }),
 };

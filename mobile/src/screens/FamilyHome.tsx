@@ -97,7 +97,7 @@ export function FamilyHome() {
   return (
     <>
       <MapShell
-        title={ride ? (ride.direction === "to_school" ? t("family.toSchool") : t("family.toHome")) : "Wheelie"}
+        title={ride ? (ride.direction === "to_school" ? t("family.toSchool") : t("family.toHome")) : "RouteIQ"}
         chip={ride ? <Pill text={t("family.live")} tone="green" /> : undefined}
         map={map}
       >

@@ -1,4 +1,4 @@
-// Wheelie: warm orange, big rounded shapes, map-first screens.
+// RouteIQ: warm orange, big rounded shapes, map-first screens.
 export const colors = {
   primary: "#FF7A1A",
   primaryDark: "#E5600A",

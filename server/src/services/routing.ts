@@ -7,6 +7,7 @@ import type {
 } from "../types.js";
 import { distanceMeters, isWithinGeofence } from "./geofence.js";
 import { recomputeEtas } from "./eta.js";
+import { recordStopArrival } from "./learning.js";
 
 /**
  * Speed that makes our straight-line ETA model add up to the Mapbox drive time
@@ -213,6 +214,7 @@ export function evaluateGeofences(
 
     if (busAtStop) {
       stopState.status = stillPending ? "pending" : "boarded";
+      if (stopId === session.remainingStopIds[0]) recordStopArrival(session, route, stopId);
     }
   }
 }

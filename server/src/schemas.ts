@@ -112,11 +112,13 @@ export const checkinSchema = z
   .object({
     token: z.string().min(10).max(2000).optional(),
     tagId: z.string().min(1).max(64).optional(),
+    // Manual check-in by the driver for a student without a phone or card.
+    studentId: z.string().uuid().optional(),
     // Set by the app so a retried or offline-queued scan is counted once.
     scanId: z.string().min(8).max(64).optional(),
     scannedAt: z.string().datetime().optional(),
   })
-  .refine((v) => v.token || v.tagId, "token or tagId required");
+  .refine((v) => v.token || v.tagId || v.studentId, "token, tagId or studentId required");
 
 export const geoSearchSchema = z.object({
   q: z.string().trim().min(2).max(200),

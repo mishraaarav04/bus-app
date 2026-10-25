@@ -11,7 +11,7 @@ export function useMapConfig() {
     api
       .mapConfig()
       .then((c) => {
-        cached = c;
+        if (c.enabled) cached = c; // never remember "no token": retry next time
         setConfig(c);
       })
       .catch(() => setConfig({ enabled: false, token: null }))

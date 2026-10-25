@@ -1,4 +1,4 @@
-# Wheelie
+# RouteIQ
 
 School bus tracking with five account types, an orange Life360-style app, and
 Mapbox-powered routing that accounts for bus clearance.
@@ -6,13 +6,14 @@ Mapbox-powered routing that accounts for bus clearance.
 ```
 server/   Node + TypeScript + Express + Socket.io
 mobile/   Expo (React Native) app, runs in Expo Go
+web/      Marketing homepage + dashboard for school and bus company accounts (Vite + React)
 ```
 
 ## Accounts
 
 | Account | How you get one | What it does |
 |---|---|---|
-| **Bus company** | Created by Wheelie (demo below) | Adds schools, builds routes from a list of stops, assigns drivers, sends routes to schools |
+| **Bus company** | Created by RouteIQ (demo below) | Adds schools, builds routes from a list of stops, assigns drivers, sends routes to schools |
 | **School** | Created by the bus company | Sees only its own routes, watches buses progress live, assigns students to stops |
 | **Driver** | Sign up with the company's driver code | Starts/ends a ride (this is when location sharing turns on/off), scans students on |
 | **Student** | Sign up with the school's student code | Shows a boarding QR, sees ETA, flags "not riding today" |
@@ -52,6 +53,11 @@ npm test
 cd ../mobile
 npm install
 npm start                # scan the QR in Expo Go
+
+cd ../web
+npm install
+cp .env.example .env
+npm run dev              # :5173, sign in with company@ or school@wheelie.demo
 ```
 
 The app finds the server automatically from the Expo dev server's address. If you use `--tunnel`, set `EXPO_PUBLIC_API_URL` (or edit `MANUAL_API_URL` in `mobile/src/api/client.ts`).
@@ -84,17 +90,27 @@ Everything is stored in one SQLite file (`DB_PATH`, default `server/data/wheelie
 
 **Everyone**: sign-in with silent token refresh, forgot password (6-digit code by email), email confirmation, Alerts inbox with unread badge, push notifications, English / Spanish / Portuguese, download my data, delete my account, sign-up consent.
 
-**Students and parents**: live bus, ETA and status; delay / breakdown banners; "arrived at school / dropped off" status; plan "not riding" days up to 60 days ahead; ride history (90 days); parents can link several children and set "hand to an adult" rules with a list of allowed pickup names.
+**Students and parents**: live bus, ETA and status; delay / breakdown banners; "arrived at school / dropped off" status; plan "not riding" days up to 60 days ahead; parents get an alert when a child marks themselves as not riding or when another parent plans an absence; ride history (90 days); parents can link several children and set "hand to an adult" rules with a list of allowed pickup names.
 
-**Drivers**: location keeps sharing when the phone is locked (development build only, see `docs/DEV_BUILD.md`); report delay / breakdown / accident and clear it with "Back on the road"; drop-off with adult hand-off; end-of-ride check that students aren't still aboard; warnings when scanning a student on the wrong bus or stop; scans made without signal are saved and sent later (counted once).
+**Drivers**: check in any student by hand (for students without a phone; the parent gets the normal boarding alert and the activity log records it); location keeps sharing when the phone is locked (development build only, see `docs/DEV_BUILD.md`); report delay / breakdown / accident and clear it with "Back on the road"; drop-off with adult hand-off; end-of-ride check that students aren't still aboard; warnings when scanning a student on the wrong bus or stop; scans made without signal are saved and sent later (counted once).
 
 **Schools and bus companies**: Reports (rides, boarded %, missed, incidents, on-time, CSV export), activity log, student list import from CSV with optional parent email invites, usual start times, handing a running route to a substitute driver, automatic alerts when a bus leaves its route or sits still.
 
 **Debug menu (development only)**: in a development run (`npm start`) a small bug tab on the left edge of every screen opens a list of all screens, plus one-tap sign-in as any demo account. It's compiled out of production builds and doesn't change how the app's own tabs and screens work.
 
+**Website (`web/`)**: a public homepage, then a staff-only dashboard: live map of running buses, routes (build, assign driver, schedule, send), drivers and schools, students and roster import, reports with CSV download, alerts, activity log. See `web/README.md`.
+
+### Smarter features
+
+- **Arrival times that learn.** Every ride records how long the bus took between stops. After 3 rides on a route, estimates use those times (stops and traffic included) for rides starting at a similar time of day. Before that, they use distance and an average speed. The Insights page shows how much closer the learned estimates are.
+- **Early late-bus warnings.** If a ride is on track to finish `DELAY_FORECAST_MINUTES` (default 6) later than the route usually does, families and staff get "Bus may be late", once, and again only if it gets 5+ minutes worse. Needs 4 past rides.
+- **Insights (dashboard).** Expected riders per route (each student's own weekday pattern minus planned absences), things that look unusual (a ride that ran long, a route starting later, repeat problems, a regular rider who stopped showing up), and route ideas (merge nearby stops, overlapping routes, routes that could share a bus, nearly full buses). Ideas are suggestions; nothing changes by itself.
+- **Ask RouteIQ (dashboard).** Ask questions about your routes in plain words. With `ANTHROPIC_API_KEY` set, Claude answers using read-only lookups that are limited to your own account. Without a key a built-in mode answers the common questions. Only totals, route names and driver names are sent to Anthropic, never student names.
+- **Notice writer (dashboard, Alerts).** Describe what happened in a few words, review the English, Spanish and Portuguese notice, then send it to a route's families. Nothing is sent without a person pressing Send, and each send is in the activity log.
+
 ### Environment variables
 
-See `server/.env.example` for the full list with comments. The ones you'll most likely set: `MAPBOX_TOKEN`, `JWT_SECRET` (required in production), `DB_PATH`, `RESEND_API_KEY` + `EMAIL_FROM` (without these, emails are printed in the server console), `SCHOOL_TIMEZONE`, `PRIVACY_URL`, `TERMS_URL`.
+See `server/.env.example` for the full list with comments. The ones you'll most likely set: `MAPBOX_TOKEN`, `JWT_SECRET` (required in production), `DB_PATH`, `RESEND_API_KEY` + `EMAIL_FROM` (without these, emails are printed in the server console), `WEB_ORIGIN` (the website's address, so the browser may call the API; `http://localhost:5173` is allowed by default in development), `ANTHROPIC_API_KEY` (optional, for Ask RouteIQ and the notice writer), `DELAY_FORECAST_MINUTES`, `BUS_SEATS`, `SCHOOL_TIMEZONE`, `PRIVACY_URL`, `TERMS_URL`.
 
 ### Docs
 

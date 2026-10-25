@@ -278,7 +278,7 @@ function Privacy() {
   async function exportData() {
     try {
       const json = await api.exportMyData();
-      await Share.share({ message: json, title: "Wheelie data export" });
+      await Share.share({ message: json, title: "RouteIQ data export" });
     } catch (e: any) {
       Alert.alert(t("common.error"), e.message);
     }

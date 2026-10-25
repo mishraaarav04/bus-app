@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Wheelie",
+    "slug": "wheelie",
+    "version": "0.3.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FFFFFF",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Wheelie uses the camera to scan students' boarding codes."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Wheelie shares the bus location with families and the school while a ride is active, even if the phone is locked.",
+          "locationWhenInUsePermission": "Your bus location is shared only while a ride is active, so families and the school can follow the bus.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FF7A1A"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.wheelie",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your bus location is shared only while a ride is active, so families and the school can follow the bus.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Wheelie shares the bus location with families and the school while a ride is active, even if the phone is locked.",
+        "UIBackgroundModes": ["location"]
+      }
+    },
+    "android": {
+      "package": "com.example.wheelie",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "CAMERA"
+      ]
+    }
+  }
+}

@@ -513,3 +513,84 @@ describe("privacy", () => {
     expect((await api("/auth/me", { token: (await login("school@wheelie.demo")).token, method: "DELETE", body: { password: "x" } })).status).toBe(403);
   });
 });
+
+describe("manual check-in and 'not riding' alerts", () => {
+  it("lets the driver check in a student by hand, only on their own route", async () => {
+    const parent = await login("parent@wheelie.demo");
+    const ava = await login("student2@wheelie.demo");
+    const { driver, rideId } = await startRide("driver@wheelie.demo", IRONBOUND);
+    await api(`/rides/${rideId}/location`, { token: driver.token, body: BROAD_MARKET });
+    const samId = parent.user.linkedStudentIds[0];
+
+    const ok = await api(`/rides/${rideId}/checkin`, { token: driver.token, body: { studentId: samId } });
+    expect(ok.status).toBe(200);
+    expect(ok.json.name).toBe("Sam Student");
+    expect((await api("/rides/active", { token: parent.token })).json[0].mine[0].status).toBe("boarded");
+    const inbox = await api("/notifications", { token: parent.token });
+    expect(inbox.json.items.map((n: any) => n.kind)).toContain("boarded");
+
+    // Checking in twice is harmless.
+    const again = await api(`/rides/${rideId}/checkin`, { token: driver.token, body: { studentId: samId } });
+    expect(again.json.alreadyBoarded).toBe(true);
+
+    // A student from another route, or a made-up id, is refused.
+    const other = await api(`/rides/${rideId}/checkin`, { token: driver.token, body: { studentId: ava.user.id } });
+    expect(other.status).toBe(404);
+    const fake = await api(`/rides/${rideId}/checkin`, {
+      token: driver.token,
+      body: { studentId: "11111111-1111-4111-8111-111111111111" },
+    });
+    expect(fake.status).toBe(404);
+
+    // Only drivers can do it, and it is written to the school's activity log.
+    expect((await api(`/rides/${rideId}/checkin`, { token: parent.token, body: { studentId: samId } })).status).toBe(403);
+    const school = await login("school@wheelie.demo");
+    const log = await api("/audit", { token: school.token });
+    expect(log.json.map((a: any) => a.action)).toContain("checkin.manual");
+    await endRide(driver.token, rideId);
+  });
+
+  it("tells the parent when the student marks themselves not riding, now or ahead of time", async () => {
+    const parent = await login("parent@wheelie.demo");
+    const sam = await login("student@wheelie.demo");
+    const { driver, rideId } = await startRide("driver@wheelie.demo", IRONBOUND);
+    await api("/notifications/read", { token: parent.token, body: {} });
+
+    expect((await api(`/rides/${rideId}/not-riding`, { token: sam.token, body: { studentId: sam.user.id } })).status).toBe(200);
+    let inbox = await api("/notifications", { token: parent.token });
+    const n = inbox.json.items.find((x: any) => x.kind === "not_riding");
+    expect(n.title).toContain("Sam");
+    expect(n.readAt).toBeNull();
+    // The student doesn't get an alert about their own action.
+    expect((await api("/notifications", { token: sam.token })).json.items.some((x: any) => x.kind === "not_riding")).toBe(false);
+    await endRide(driver.token, rideId);
+
+    // Planning a day off ahead of time also alerts the parent.
+    const date = addDays(todayLocal(), 3);
+    expect((await api("/absences", { token: sam.token, body: { studentId: sam.user.id, date, direction: "both" } })).status).toBe(201);
+    inbox = await api("/notifications", { token: parent.token });
+    expect(inbox.json.items.map((x: any) => x.kind)).toContain("absence_planned");
+    await api("/absences", { token: sam.token, method: "DELETE", body: { studentId: sam.user.id, date, direction: "both" } });
+
+    // A parent's own action isn't echoed back to them.
+    await api("/notifications/read", { token: parent.token, body: {} });
+    const mine = addDays(todayLocal(), 4);
+    await api("/absences", { token: parent.token, body: { studentId: sam.user.id, date: mine, direction: "to_school" } });
+    expect((await api("/notifications", { token: parent.token })).json.items.filter((x: any) => !x.readAt && x.kind === "absence_planned")).toHaveLength(0);
+    await api("/absences", { token: parent.token, method: "DELETE", body: { studentId: sam.user.id, date: mine, direction: "to_school" } });
+  });
+});
+
+describe("browser access (CORS) for the dashboard", () => {
+  it("allows the website origin and no other", async () => {
+    const site = config.webOrigins[0];
+    expect(site).toBeTruthy();
+    const pre = await api("/auth/login", { method: "OPTIONS", headers: { Origin: site, "Access-Control-Request-Method": "POST" }, raw: true });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("access-control-allow-origin")).toBe(site);
+    const ok = await api("/legal", { headers: { Origin: site } });
+    expect(ok.headers.get("access-control-allow-origin")).toBe(site);
+    const bad = await api("/legal", { headers: { Origin: "https://evil.example" } });
+    expect(bad.headers.get("access-control-allow-origin")).toBeNull();
+  });
+});

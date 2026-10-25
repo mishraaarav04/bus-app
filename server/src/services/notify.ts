@@ -19,10 +19,14 @@ const GROUP: Record<string, keyof NotifPrefs | null> = {
   arrived: "boarding",
   dropped: "boarding",
   delay: "delays",
+  delay_forecast: "delays",
+  announcement: null, // a message from the school or bus company
   breakdown: "delays",
   accident: "delays",
   other: "delays",
   resolved: "delays",
+  not_riding: null, // safety-relevant: always sent
+  absence_planned: null,
   off_route: null,
   stopped: null,
   assigned: null,
@@ -45,6 +49,8 @@ export interface NotifySpec {
   data?: Record<string, unknown>;
   // ISO time to show as {time}, formatted in each person's own language.
   at?: string;
+  // Staff-written text, by language. Used instead of the built-in wording (English is the fallback).
+  text?: Record<string, { title: string; body: string }> & { en: { title: string; body: string } };
 }
 
 const insert = db.prepare(
@@ -62,8 +68,9 @@ export function notifyUsers(userIds: Iterable<string>, spec: NotifySpec): void {
 
     const params: Record<string, string | number> = { ...(spec.params ?? {}) };
     if (spec.at) params.time = formatClock(spec.at, user.lang, config.timezone);
-    const title = tr(user.lang, `${spec.kind}_t`, params);
-    const body = tr(user.lang, spec.bodyKey ?? `${spec.kind}_b`, params);
+    const custom = spec.text ? (spec.text[user.lang as string] ?? spec.text.en) : null;
+    const title = custom ? custom.title : tr(user.lang, `${spec.kind}_t`, params);
+    const body = custom ? custom.body : tr(user.lang, spec.bodyKey ?? `${spec.kind}_b`, params);
     const data = { kind: spec.kind, ...(spec.data ?? {}) };
     const notif: AppNotification = {
       id: randomUUID(),

@@ -321,7 +321,7 @@ authRouter.delete("/auth/me", requireAuth, loginLimiter, async (req, res) => {
   if (user.role === "company" || user.role === "admin") {
     return res
       .status(403)
-      .json({ error: "Bus company and school accounts are removed by Wheelie. Contact support." });
+      .json({ error: "Bus company and school accounts are removed by RouteIQ. Contact support." });
   }
   if (!(await verifyPassword(parsed.data.password, user.passwordHash))) {
     return res.status(401).json({ error: "That password is incorrect." });

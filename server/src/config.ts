@@ -33,6 +33,12 @@ export const config = {
   locationTokenTtlSec: 14 * 3600,
   bcryptCost: 12,
   mapboxToken: process.env.MAPBOX_TOKEN ?? "",
+  // Websites allowed to call this API from a browser (the RouteIQ dashboard). Comma-separated.
+  // The phone app doesn't need this. Defaults to the local dev site.
+  webOrigins: (process.env.WEB_ORIGIN ?? (isProd ? "" : "http://localhost:5173,http://127.0.0.1:5173"))
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
   // Demo accounts are for local testing only. Never seeded in production.
   seedDemo: !isProd && process.env.SEED_DEMO !== "false",
 
@@ -51,7 +57,7 @@ export const config = {
   // Email (password reset, verification, roster invites). Without a key the
   // messages are printed to the server console in dev.
   resendApiKey: process.env.RESEND_API_KEY ?? "",
-  emailFrom: process.env.EMAIL_FROM ?? "Wheelie <no-reply@example.com>",
+  emailFrom: process.env.EMAIL_FROM ?? "RouteIQ <no-reply@example.com>",
   // Push notifications go through Expo. The token is optional (raises limits).
   expoAccessToken: process.env.EXPO_ACCESS_TOKEN ?? "",
 
@@ -63,6 +69,15 @@ export const config = {
   approachSeconds: num(process.env.APPROACH_SECONDS, 300),
   offRouteMeters: num(process.env.OFF_ROUTE_METERS, 200),
   stationarySeconds: num(process.env.STATIONARY_SECONDS, 300),
+
+  // Learning from ride history (always on; needs no outside service).
+  delayForecastMinutes: num(process.env.DELAY_FORECAST_MINUTES, 6),
+  busSeats: num(process.env.BUS_SEATS, 44),
+
+  // "Ask RouteIQ" and alert drafting use Claude when a key is set. Without a key
+  // both still work in a simpler built-in mode. Only totals, route names and driver names are sent. Never student names.
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  aiModel: process.env.AI_MODEL ?? "claude-sonnet-5-5",
 };
 
 if (!config.mapboxToken) {

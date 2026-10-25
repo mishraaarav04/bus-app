@@ -5,6 +5,7 @@ import { absenceSchema } from "../schemas.js";
 import { addAbsence, lastAllowedDate, removeAbsence, upcomingAbsences } from "../services/absences.js";
 import { broadcastRide } from "../services/rideBroadcast.js";
 import { markStudentNotRiding } from "../services/routing.js";
+import { onAbsencePlanned } from "../services/rideEvents.js";
 import { isValidDate, todayLocal } from "../services/time.js";
 import type { User } from "../types.js";
 
@@ -30,6 +31,7 @@ absencesRouter.post("/absences", (req, res) => {
   if (date > lastAllowedDate()) return res.status(400).json({ error: "You can plan up to 60 days ahead." });
 
   addAbsence(studentId, date, direction, req.user!.id);
+  onAbsencePlanned(studentId, req.user!.id, date, direction);
 
   // If a matching run is already underway today, apply it right away.
   if (date === todayLocal()) {
