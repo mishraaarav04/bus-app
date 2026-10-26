@@ -11,7 +11,8 @@ if (!domain) {
 const port = process.env.PORT || "4000";
 const run = (cmd, args) => spawn(cmd, args, { stdio: "inherit", shell: process.platform === "win32" });
 
-const server = run("npx", ["tsx", "src/index.ts"]);
+// Behind ngrok every request carries X-Forwarded-For, so the server must trust one proxy hop.
+const server = spawn("npx", ["tsx", "src/index.ts"], { stdio: "inherit", env: { ...process.env, TRUST_PROXY: process.env.TRUST_PROXY || "1" }, shell: process.platform === "win32" });
 const tunnel = run("ngrok", ["http", `--url=${domain}`, port]);
 console.log(`\nPublic address: https://${domain}\n`);
 

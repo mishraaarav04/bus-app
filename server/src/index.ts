@@ -12,6 +12,7 @@ process.on("unhandledRejection", (e) => console.error("[wheelie] unhandled rejec
 
 httpServer.listen(config.port, async () => {
   console.log(`RouteIQ server listening on :${config.port} (database: ${config.dbPath})`);
+  console.log(config.aiApiKey ? `AI: on (${config.aiModel || "model picked automatically"})` : "AI: off, no NVIDIA_API_KEY found in server/.env (built-in answers only)");
   if (config.seedDemo) await seedDemo();
   startRetentionJob();
   sweepEndedRides();

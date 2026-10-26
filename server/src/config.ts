@@ -79,7 +79,8 @@ export const config = {
   // Only totals, route names and driver names are sent. Never student names.
   aiApiKey: process.env.NVIDIA_API_KEY || process.env.AI_API_KEY || "",
   aiBaseUrl: (process.env.AI_BASE_URL || "https://integrate.api.nvidia.com/v1").replace(/\/$/, ""),
-  aiModel: process.env.AI_MODEL || "meta/llama-3.3-70b-instruct",
+  // Leave AI_MODEL unset to let the server try a list of known NIM models until one works.
+  aiModel: process.env.AI_MODEL || "",
 };
 
 if (!config.mapboxToken) {

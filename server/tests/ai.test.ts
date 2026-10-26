@@ -238,6 +238,23 @@ describe("Ask RouteIQ", () => {
     expect(toolText).not.toContain("Sam Student");
   });
 
+  it("skips a retired model (410) and uses the next one", async () => {
+    config.aiApiKey = "test-key";
+    const company = await login("company@wheelie.demo");
+    const tried: string[] = [];
+    globalThis.fetch = (async (url: any, init: any) => {
+      if (!String(url).startsWith("https://integrate.api.nvidia.com")) return realFetch(url, init);
+      const model = JSON.parse(init.body).model;
+      tried.push(model);
+      if (tried.length === 1) return new Response("{}", { status: 410 });
+      return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "All good." } }] }));
+    }) as any;
+    const r = await api("/ai/ask", { token: company.token, body: { question: "how were the routes?" } });
+    expect(r.json).toEqual({ answer: "All good.", mode: "ai" });
+    expect(tried.length).toBe(2);
+    expect(tried[0]).not.toBe(tried[1]);
+  });
+
   it("falls back to the built-in answer if the AI service fails", async () => {
     config.aiApiKey = "test-key";
     const company = await login("company@wheelie.demo");

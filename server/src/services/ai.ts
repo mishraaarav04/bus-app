@@ -173,22 +173,82 @@ function runTool(scope: Scope, name: string, args: Args): string {
 
 // ---- model (OpenAI-compatible chat API, NVIDIA NIM by default) -----------------------------
 
-async function chat(body: Record<string, unknown>): Promise<any> {
-  let res: Response;
+// Models NVIDIA has retired answer 404 or 410, so when AI_MODEL isn't set (or has been retired)
+// we try these in turn and remember the first one that works.
+const FALLBACK_MODELS = [
+  "meta/llama-3.3-70b-instruct",
+  "openai/gpt-oss-120b",
+  "meta/llama-3.1-70b-instruct",
+  "qwen/qwen3-next-80b-a3b-instruct",
+  "mistralai/mistral-large-2-instruct",
+  "meta/llama-3.1-405b-instruct",
+  "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+  "meta/llama-4-maverick-17b-128e-instruct",
+];
+let workingModel: string | null = null;
+
+const NOT_CHAT = /embed|rerank|guard|safety|vision|-vl|vlm|clip|parse|reward|retriev|asr|tts|translate|riva|diffusion|image|video|speech|nv-|bge|arctic-embed|code-|starcoder/i;
+const LIKELY_BEST = /instruct|llama|qwen|gpt-oss|nemotron|mistral|deepseek|gemma|kimi|glm/i;
+
+// Ask the service which models it has right now, best guesses first.
+async function liveModels(): Promise<string[]> {
   try {
-    res = await fetch(`${config.aiBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${config.aiApiKey}` },
-      body: JSON.stringify({ model: config.aiModel, max_tokens: 1200, temperature: 0.2, ...body }),
-      signal: AbortSignal.timeout(45_000),
-    });
+    const res = await fetch(`${config.aiBaseUrl}/models`, { headers: { authorization: `Bearer ${config.aiApiKey}` }, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return [];
+    const ids: string[] = ((await res.json())?.data ?? []).map((m: any) => String(m.id)).filter((id: string) => id && !NOT_CHAT.test(id));
+    return [...ids.filter((id) => LIKELY_BEST.test(id)), ...ids.filter((id) => !LIKELY_BEST.test(id))];
   } catch {
-    throw new AiError("The AI service didn't respond.");
+    return [];
   }
-  if (!res.ok) throw new AiError(`The AI service returned ${res.status}.`);
-  const message = (await res.json())?.choices?.[0]?.message;
-  if (!message) throw new AiError("Empty answer.");
-  return message;
+}
+
+async function chat(body: Record<string, unknown>): Promise<any> {
+  const tried = new Set<string>();
+  let queue = [...new Set([workingModel, config.aiModel, ...FALLBACK_MODELS].filter((m): m is string => Boolean(m)))];
+  let discovered = false;
+  for (let attempts = 0; attempts < 14; attempts++) {
+    const model = queue.shift();
+    if (!model) {
+      if (discovered) break;
+      discovered = true;
+      queue = (await liveModels()).filter((m) => !tried.has(m)).slice(0, 10);
+      console.warn(`[ai] asking ${config.aiBaseUrl}/models for what is available (${queue.length} candidates).`);
+      continue;
+    }
+    tried.add(model);
+    let res: Response;
+    try {
+      res = await fetch(`${config.aiBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${config.aiApiKey}` },
+        body: JSON.stringify({ model, max_tokens: 1200, temperature: 0.2, ...body }),
+        signal: AbortSignal.timeout(45_000),
+      });
+    } catch (e) {
+      console.warn(`[ai] could not reach ${config.aiBaseUrl}: ${(e as Error).message}`);
+      throw new AiError("The AI service didn't respond.");
+    }
+    if (res.status === 404 || res.status === 410 || res.status === 400 || res.status === 422) {
+      const detail = (await res.text().catch(() => "")).slice(0, 160);
+      console.warn(`[ai] "${model}" didn't work (${res.status}) ${discovered ? detail : ""}; trying the next model.`);
+      if (workingModel === model) workingModel = null;
+      continue;
+    }
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => "")).slice(0, 300);
+      console.warn(`[ai] ${config.aiBaseUrl} answered ${res.status} for model "${model}": ${detail}`);
+      throw new AiError(`The AI service returned ${res.status}.`);
+    }
+    const message = (await res.json())?.choices?.[0]?.message;
+    if (!message) throw new AiError("Empty answer.");
+    if (workingModel !== model) {
+      workingModel = model;
+      console.log(`[ai] using model ${model}. Add AI_MODEL=${model} to server/.env to skip the search next time.`);
+    }
+    return message;
+  }
+  console.warn("[ai] no available model worked. Run `npm run ai-models` to see what your key can use, then set AI_MODEL in server/.env.");
+  throw new AiError("No AI model is available.");
 }
 
 const textOf = (m: any): string => (typeof m?.content === "string" ? m.content : "").trim();
@@ -232,6 +292,7 @@ export async function askData(user: User, question: string): Promise<Answer> {
     throw new AiError("Too many steps.");
   } catch (e) {
     if (!(e instanceof AiError)) throw e;
+    console.warn(`[ai] using built-in answer: ${e.message}`);
     const basic = basicAnswer(scope, question);
     return { ...basic, note: "The AI service wasn't available, so this is the built-in answer." };
   }
@@ -309,7 +370,8 @@ export async function draftAlert(user: User, note: string, routeName?: string): 
     const parsed = draftSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) throw new AiError("Unexpected format.");
     return { draft: parsed.data, mode: "ai" };
-  } catch {
+  } catch (e) {
+    console.warn(`[ai] draft fell back to the plain note: ${(e as Error).message}`);
     return { ...plain(), note: "The AI service wasn't available, so this is your note as written." };
   }
 }

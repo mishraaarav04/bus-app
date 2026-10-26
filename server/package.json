@@ -12,7 +12,8 @@
     "backup": "node scripts/backup.mjs",
     "typecheck": "tsc --noEmit -p .",
     "use-my-streets": "tsx scripts/use-my-streets.ts",
-    "tunnel": "node scripts/tunnel.mjs"
+    "tunnel": "node scripts/tunnel.mjs",
+    "ai-models": "node scripts/ai-models.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
